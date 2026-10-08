@@ -1,48 +1,98 @@
 # Validation du durcissement Compose (db + api-python, secret fichier)
-# Environnement : Docker Desktop macOS arm64 (Docker 29.5.3, Compose 5.1.4), image linux/amd64 (flask-api:local sha256:21609806...).
-# Limite : sur Docker Desktop le propriétaire/permissions d'un fichier monté en bind diffèrent de Linux
-#   (ici le secret apparaît en uid 65532, mode 0644). L'exigence 0644 sur le runner Linux de la CI n'est donc PAS prouvée par ce run.
+# Environnement : Docker Desktop macOS arm64 (Docker 29.5.3, Compose 5.1.4), image linux/amd64 flask-api:local sha256:21609806331b30327a113e7b0201eb81e547380af587d1fd35a33314c1fc6589.
+# Limite : sur Docker Desktop le propriétaire et les permissions d'un fichier monté en bind diffèrent de Linux.
+#   L'exigence 0644 (lisibilité par les UID 65532 et 70) n'est donc PAS prouvée par ce run : la preuve est le run Linux de la CI.
 # Variables : COMPOSE_PROJECT_NAME=hardening-check API_IMAGE=flask-api:local DB_USER=ci_user DB_NAME=ci_db, --env-file /dev/null
-# date: 2026-10-08T12:58:46Z (horodatage d'écriture du fichier, fin du run)
+# Aucune valeur de mot de passe n'est consignée (secret généré par openssl rand -hex 24, jamais affiché).
 
-## 3. Sans secrets/db_password : démarrage refusé
+## 1. Sans secrets/db_password : démarrage refusé (message propre à Docker Desktop)
+# date: 2026-10-08T13:16:56Z
 # cmd: docker compose --env-file /dev/null up -d --no-build db
+level=warning msg="secret file hardening-check_db_password does not exist"
+ Container hardening-check-db-1 Error response from daemon: invalid mount config for type "bind": bind source path does not exist: /host_mnt/.../secrets/db_password 
 Error response from daemon: invalid mount config for type "bind": bind source path does not exist: /host_mnt/.../secrets/db_password
 # exit: 1
 
-## 4. Démarrage avec secret 0644 (mot de passe openssl rand -hex 24, valeur non journalisée)
-# cmd: docker compose --env-file /dev/null up -d --no-build --wait --wait-timeout 180
- Container hardening-check-db-1 Healthy
- Container hardening-check-api-python-1 Healthy
-# exit: 0
-# image api = flask-api:local (même ID sha256:21609806331b...) : oui
+## 2. Secret source environment: refusé sur un service read_only
+# date: 2026-10-08T13:16:56Z
+# note : un fichier override ne peut pas changer la source (erreur « secrets.db_password: file|environment attributes are mutually exclusive »).
+#   Copie temporaire de docker-compose.yml dans /tmp avec « file: ./secrets/db_password » remplacé par « environment: DB_PASSWORD » (supprimée ensuite).
+# cmd: DB_PASSWORD=$(openssl rand -hex 24) docker compose --env-file /dev/null -f /tmp/compose-envsecret.yml --project-directory <repo> up -d --no-build
+cannot create secret "hardening-check_db_password" in read-only service db: `file` is the sole supported option
+# exit: 1
 
-## 5. Preuves de durcissement (docker inspect / exec)
-# cmd: docker inspect <conteneur> --format ...
+## 3. Démarrage comme la CI (secret 0644, valeur non journalisée)
+# date: 2026-10-08T13:16:56Z
+# cmd: install -d -m 0755 secrets; printf '%s' "$(openssl rand -hex 24)" > secrets/db_password; chmod 0644 secrets/db_password; docker compose --env-file /dev/null up -d --no-build --wait --wait-timeout 180
+ Container hardening-check-db-1 Healthy 
+ Container hardening-check-db-1 Healthy 
+ Container hardening-check-api-python-1 Healthy 
+# exit: 0
+# cmd: docker compose ps --format ...
+api-python state=running health=healthy
+db state=running health=healthy
+# image api = flask-api:local (sha256:21609806331b30327a113e7b0201eb81e547380af587d1fd35a33314c1fc6589) : identique à sha256:21609806331b30327a113e7b0201eb81e547380af587d1fd35a33314c1fc6589 : oui
+
+## 4. Preuves de durcissement (docker inspect, /proc, écritures)
+# date: 2026-10-08T13:17:08Z
+# cmd: docker inspect <conteneur> --format 'ReadonlyRootfs CapDrop SecurityOpt Memory PidsLimit User'
 api-python: ReadonlyRootfs=true CapDrop=[ALL] SecurityOpt=[no-new-privileges:true] Memory=268435456 PidsLimit=64 User=65532:65532
-db        : ReadonlyRootfs=true CapDrop=[ALL] SecurityOpt=[no-new-privileges:true] Memory=536870912 PidsLimit=128 User=70:70
-mot de passe présent dans Config.Env (api / db) : non / non
-# cmd: exec api-python /app/venv/bin/python -c (lecture /proc/1/status, écritures, secret)
-Uid: 65532  CapEff: 0000000000000000  NoNewPrivs: 1
-écriture /app/x : échec (Read-only file system) ; écriture /x : échec (Read-only file system)
-/run/secrets/db_password : lisible, taille 48, mode 0644, uid 65532 (Docker Desktop)
-'DB_PASSWORD' dans os.environ : non
-# cmd: exec db /usr/bin/id
+db: ReadonlyRootfs=true CapDrop=[ALL] SecurityOpt=[no-new-privileges:true] Memory=536870912 PidsLimit=128 User=70:70
+mot de passe (valeur) présent dans docker inspect / Config.Env : api-python=non db=non
+# cmd: docker exec <api> /app/venv/bin/python -c <lecture /proc/1/status et /proc/1/environ>
+PID 1 = python | Uid: 65532 | CapEff: 0000000000000000 | NoNewPrivs: 1
+DB_PASSWORD (hors _FILE) dans /proc/1/environ : non
+POSTGRES_PASSWORD (hors _FILE) dans /proc/1/environ : non
+DB_PASSWORD_FILE dans /proc/1/environ : oui (chemin seulement)
+# cmd: docker run --rm --platform linux/amd64 --pid=container:<db> --entrypoint /app/venv/bin/python flask-api:local -c <idem> (db n'a pas de Python ; secret monté en lecture seule sur /s pour comparaison, sans affichage)
+(sans --user : échec, PermissionError: [Errno 13] Permission denied: '/proc/1/environ')
+# cmd: idem avec --user 70:70
+PID 1 = postgres | Uid: 70 | CapEff: 0000000000000000 | NoNewPrivs: 1
+DB_PASSWORD (hors _FILE) dans /proc/1/environ : non
+POSTGRES_PASSWORD (hors _FILE) dans /proc/1/environ : oui
+valeur de POSTGRES_PASSWORD identique au secret : oui
+# constat : l'entrypoint de l'image PostgreSQL lit POSTGRES_PASSWORD_FILE puis exporte POSTGRES_PASSWORD dans l'environnement du processus postgres (POSTGRES_PASSWORD_FILE n'y figure plus).
+#   Le mot de passe reste absent de docker inspect, mais PRÉSENT dans /proc/1/environ de db (lisible par l'UID 70 ou root seulement). Côté api-python il est absent.
+# cmd: docker exec <api> écritures dans /app et /
+écriture /app/x : échec (Read-only file system)
+écriture /x : échec (Read-only file system)
+/run/secrets/db_password : lisible oui mode 0o644 uid 65532 (Docker Desktop)
+# cmd: docker exec <db> /usr/bin/id
 uid=70(postgres) gid=70(postgres) groups=70(postgres)
-# exit: 0
 
-## 6. Tests d'intégration
+## 5. Tests d'intégration
+# date: 2026-10-08T13:17:09Z
 # cmd: API_BASE_URL=http://127.0.0.1:5000 pytest -m integration tests/integration
-3 passed in 0.12s
+============================== 3 passed in 0.11s ===============================
 # exit: 0
 
-## 7. Persistance du volume db-data (PostgreSQL 18.6)
-# cmd: psql -c "create table persist(v int); insert into persist values (42);" ; docker compose down (sans -v) ; up --wait ; select v from persist
-CREATE TABLE / INSERT 0 1
-down : exit 0 ; up --wait : db et api-python Healthy, exit 0
+## 6. Persistance du volume db-data
+# date: 2026-10-08T13:17:09Z
+# cmd: docker compose exec -T db /usr/bin/psql -h /tmp -U ci_user -d ci_db -c 'create table persist(v int); insert into persist values (42);'
+CREATE TABLE
+INSERT 0 1
+# exit: 0
+# cmd: docker compose --env-file /dev/null down (sans -v)
+ Container hardening-check-api-python-1 Removed 
+ Container hardening-check-db-1 Removed 
+ Network hardening-check_backend Removed 
+ Network hardening-check_frontend Removed 
+# exit: 0
+# cmd: docker compose --env-file /dev/null up -d --no-build --wait --wait-timeout 180
+ Container hardening-check-db-1 Healthy 
+ Container hardening-check-db-1 Healthy 
+ Container hardening-check-api-python-1 Healthy 
+# exit: 0
+# cmd: docker compose exec -T db /usr/bin/psql -h /tmp -U ci_user -d ci_db -At -c 'select v from persist'
 select v from persist -> 42
-# exit: 0
 
-## Nettoyage
-# cmd: docker compose down --volumes --remove-orphans ; rm -rf secrets
+## 7. Nettoyage
+# date: 2026-10-08T13:17:22Z
+# cmd: docker compose --env-file /dev/null down --volumes --remove-orphans; rm -rf secrets
+ Container hardening-check-api-python-1 Removed 
+ Container hardening-check-db-1 Removed 
+ Volume hardening-check_db-data Removed 
+ Network hardening-check_backend Removed 
+ Network hardening-check_frontend Removed 
 # exit: 0
+# résidus : conteneurs=0 volumes=0 secrets/=absent

@@ -1,12 +1,13 @@
-# date: 2026-10-08T11:49:25Z
+# date: 2026-10-08T13:13:25Z
+# image: flask-api:local sha256:21609806331b30327a113e7b0201eb81e547380af587d1fd35a33314c1fc6589
 # cmd: docker run --read-only --cap-drop ALL --security-opt no-new-privileges -p 127.0.0.1:5051:5000 flask-api:local (sans base de données)
 GET /health -> {"status":"ok"} 200
 GET /hello -> {"message":"Hello world"} 200
 GET /dbtest -> {"db_connection":"failed"} 500
 ## journaux
-[2026-10-08 11:49:20 +0000] [1] [INFO] Starting gunicorn 26.2.0
-[2026-10-08 11:49:20 +0000] [1] [INFO] Listening at: http://0.0.0.0:5000 (1)
-[2026-10-08 11:49:20 +0000] [1] [INFO] Using worker: sync
-[2026-10-08 11:49:20 +0000] [6] [INFO] Booting worker with pid: 6
-[2026-10-08 11:49:20 +0000] [7] [INFO] Booting worker with pid: 7
-[2026-10-08 11:49:25,330] ERROR in app: Database connectivity check failed
+[2026-10-08 13:13:25 +0000] [1] [INFO] Starting gunicorn 26.2.0
+[2026-10-08 13:13:25 +0000] [1] [INFO] Listening at: http://0.0.0.0:5000 (1)
+[2026-10-08 13:13:25 +0000] [1] [INFO] Using worker: sync
+[2026-10-08 13:13:25 +0000] [7] [INFO] Booting worker with pid: 7
+[2026-10-08 13:13:25 +0000] [8] [INFO] Booting worker with pid: 8
+[2026-10-08 13:13:26,617] ERROR in app: Database connectivity check failed

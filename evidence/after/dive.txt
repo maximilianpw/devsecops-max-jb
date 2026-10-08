@@ -1,4 +1,5 @@
-# date: 2026-10-08T11:49:13Z
+# date: 2026-10-08T13:13:14Z
+# image: flask-api:local sha256:21609806331b30327a113e7b0201eb81e547380af587d1fd35a33314c1fc6589
 # cmd: dive --ci --lowestEfficiency=0.8 --highestWastedBytes=disabled --highestUserWastedPercent=disabled flask-api:local
 # exit: 0
   Using default CI config
@@ -29,3 +30,4 @@ Results:
   SKIP: highestWastedBytes: rule disabled
   PASS: lowestEfficiency
 Result:PASS [Total:3] [Passed:1] [Failed:0] [Warn:0] [Skipped:2]
+

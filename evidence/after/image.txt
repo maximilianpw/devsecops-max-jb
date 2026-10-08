@@ -1,16 +1,16 @@
-# date: 2026-10-08T11:49:08Z
-# image: flask-api:local
+# date: 2026-10-08T13:13:09Z
+# image: flask-api:local sha256:21609806331b30327a113e7b0201eb81e547380af587d1fd35a33314c1fc6589
+# tailles : octets non compressés (somme des couches, dive --json), comme dive.txt ; docker image inspect .Size (contenu compressé, magasin containerd de Docker Desktop) = 33710171 octets
 ## configuration
-id=sha256:80e8548b7d658a19b752fd8538b2506fc7c7b745799f28e988e7626e5fb166df os/arch=linux/amd64
+id=sha256:21609806331b30327a113e7b0201eb81e547380af587d1fd35a33314c1fc6589 os/arch=linux/amd64
 Config.User=65532:65532
 Entrypoint=["/app/venv/bin/python","-m","gunicorn"] Cmd=["--bind","0.0.0.0:5000","--workers","2","--worker-tmp-dir","/dev/shm","--no-control-socket","--access-logfile","-","app:app"]
-size_bytes=86619849
+size_bytes=86619397
 size_MB=86.6 (10^6 octets)
 ## utilisateur effectif
 uid 65532 gid 65532 nom nonroot
 ## shell : docker run --entrypoint /bin/sh flask-api:local -c 'echo shell'
 docker: Error response from daemon: failed to create task for container: failed to create shim task: OCI runtime create failed: runc create failed: unable to start container process: error during container init: exec: "/bin/sh": stat /bin/sh: no such file or directory
-
 exit: 127
 ## binaires et modules (recherche dans PATH et /bin, /sbin, /usr/bin, /usr/sbin)
 sh: absent
@@ -34,9 +34,9 @@ module ensurepip: présent
 module setuptools: absent
 module pytest: absent
 ## contenu et permissions de /app
-/app 0o40755 uid=0 gid=0 
-/app/app.py 0o100644 uid=0 gid=0 
-/app/venv 0o40755 uid=0 gid=0 
+/app 0o40755 uid=0 gid=0
+/app/app.py 0o100644 uid=0 gid=0
+/app/venv 0o40755 uid=0 gid=0
 /app/venv/bin/python 0o120777 uid=0 gid=0 -> /usr/bin/python
 /app : ['app.py', 'venv']
 /app/venv/bin : ['Activate.ps1', 'activate', 'activate.csh', 'activate.fish', 'flask', 'gunicorn', 'gunicornc', 'python', 'python3', 'python3.14', '𝜋thon']
@@ -61,7 +61,7 @@ psycopg2-binary==2.9.13
 0B	EXPOSE [5000/tcp]
 0B	USER 65532:65532
 0B	WORKDIR /app
-1.44kB	COPY app.py /app/app.py # buildkit
+1.82kB	COPY app.py /app/app.py # buildkit
 19MB	COPY --chown=0:0 /app/venv /app/venv # build…
 0B	ENV PATH=/app/venv/bin:/usr/local/sbin:/usr/…
 129kB	apko

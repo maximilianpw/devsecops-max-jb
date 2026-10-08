@@ -137,7 +137,8 @@ Contraintes vérifiées automatiquement par la CI
 - l'API utilise `image: ${API_IMAGE:-flask-api:local}` ;
 - chaque service Compose est durci (`read_only`, `cap_drop: [ALL]`,
   `no-new-privileges`, `mem_limit`, `pids_limit`, ni `cap_add` ni
-  `privileged`) et ne reçoit aucun mot de passe en variable d'environnement.
+  `privileged`), n'utilise pas `env_file` et ne reçoit aucun mot de passe en
+  variable d'environnement (clé contenant `PASSWORD` sans suffixe `_FILE`).
 
 ### Construction du Dockerfile
 
@@ -202,10 +203,15 @@ forme exec (`CMD`), sans `CMD-SHELL` : aucun shell n'est nécessaire.
   de passe est un secret Compose de type fichier : `secrets/db_password` (non
   versionné) est monté en `/run/secrets/db_password` et lu via
   `DB_PASSWORD_FILE` (API) et `POSTGRES_PASSWORD_FILE` (PostgreSQL). Il
-  n'apparaît ni dans `docker inspect` ni dans l'environnement des processus.
-  Sans ce fichier, `docker compose up` échoue (`bind source path does not
-  exist`). La source `file:` est imposée : Compose refuse de copier un secret
-  `environment:` dans un conteneur `read_only`. Le fichier garde l'UID de
+  n'apparaît ni dans `docker inspect` ni dans l'environnement du processus de
+  l'API. Limite : l'entrypoint de l'image PostgreSQL lit le fichier puis
+  réexporte `POSTGRES_PASSWORD` dans l'environnement de son propre processus,
+  lisible seulement par l'UID 70 et root
+  ([`evidence/after/compose-hardening.txt`](evidence/after/compose-hardening.txt)).
+  Sans ce fichier, `docker compose up` échoue (message observé sur Docker
+  Desktop : `bind source path does not exist`). La source `file:` est imposée :
+  Compose refuse de copier un secret `environment:` dans un conteneur
+  `read_only` (« `file` is the sole supported option », preuve archivée). Le fichier garde l'UID de
   l'hôte et doit être lisible par les UID 65532 et 70, d'où le mode `0644`.
 
 ### Durcissement Compose
@@ -250,7 +256,7 @@ tests passent aussi en `flake8 --isolated --max-line-length 88`. Le fichier
 | Message d'erreur brut (hôte, utilisateur, base) renvoyé au client | réponse fixe `{"db_connection": "failed"}` ; le détail part dans les logs |
 | `except Exception` trop large | seules les erreurs `psycopg2.Error` sont attrapées |
 | Mot de passe par défaut `testpass` dans le code | plus de valeur par défaut : `DB_PASSWORD_FILE` ou `DB_PASSWORD` doit être fourni |
-| Mot de passe visible dans l'environnement du conteneur | lu depuis le fichier `DB_PASSWORD_FILE` s'il est défini (prioritaire sur `DB_PASSWORD`) ; fichier absent = échec au démarrage |
+| Mot de passe visible dans `docker inspect` et l'environnement de l'API | lu depuis le fichier `DB_PASSWORD_FILE` s'il est défini (prioritaire sur `DB_PASSWORD`) ; fichier absent = échec au démarrage |
 | Base injoignable bloquant la requête | délai de connexion de 5 secondes |
 | `app.run(host="0.0.0.0")` : serveur de développement | supprimé, gunicorn sert l'API |
 
@@ -341,10 +347,10 @@ Hadolint + pinning ───────┘                   └─ Compose + p
 - **Trivy** : gate sur l'archive de l'image, sur `requirements.txt` et sur
   l'image PostgreSQL (digest lu dans `docker-compose.yml`, scannée depuis le
   registre) avec `HIGH,CRITICAL`, `--ignore-unfixed`, `--exit-code 1`, sans
-  liste d'exclusion. Trivy ne reconnaît pas `requirements-dev.txt` ; ces outils ne
-  sont pas embarqués dans l'image. Les rapports complets (toutes sévérités) sont archivés même en
-  cas d'échec. Un gate vert signifie « aucune HIGH/CRITICAL corrigible », pas
-  « zéro CVE ».
+  liste d'exclusion. Trivy ne reconnaît pas `requirements-dev.txt` ; ces
+  outils ne sont pas embarqués dans l'image. Les rapports complets (toutes
+  sévérités) sont archivés même en cas d'échec. Un gate vert signifie
+  « aucune HIGH/CRITICAL corrigible », pas « zéro CVE ».
 - **Intégration** : nom de projet Compose unique par run, identifiants de
   base générés et masqués à chaque run (mot de passe écrit uniquement dans
   `secrets/db_password`), logs collectés en cas d'échec,
@@ -398,7 +404,8 @@ avec le même digest.
 
 ### Mesures locales
 
-Mesures locales du 2026-10-08 (hôte arm64, images `linux/amd64`).
+Mesures locales du 2026-10-08 (hôte arm64, images `linux/amd64`), toutes sur
+la même image API `flask-api:local` (Image ID `sha256:21609806…`).
 
 | Contrôle | Commande | Résultat |
 | --- | --- | --- |
@@ -410,11 +417,11 @@ Mesures locales du 2026-10-08 (hôte arm64, images `linux/amd64`).
 | Trivy image | gate HIGH/CRITICAL corrigibles (0.75.0) | 0 ; rapport complet : 0 CVE détectée |
 | Trivy dépendances | `trivy fs` (détecte `requirements.txt`) | 0 |
 | Trivy PostgreSQL | gate HIGH/CRITICAL corrigibles sur l'image Chainguard (0.75.0) | 0 ; rapport complet : 0 CVE détectée |
-| Durcissement Compose | `docker inspect`, `/proc/1/status`, écriture sur `/` et `/app` | `ReadonlyRootfs`, `CapDrop: ALL`, `CapEff=0`, `NoNewPrivs=1`, mot de passe absent de l'environnement |
+| Durcissement Compose | `docker inspect`, `/proc/1/status` et `/proc/1/environ` des deux conteneurs, écriture sur `/` et `/app` | `ReadonlyRootfs`, `CapDrop: ALL`, `CapEff=0` et `NoNewPrivs=1` pour `api-python` et `db` ; mot de passe absent de `docker inspect` et de l'environnement de l'API, réexporté par l'entrypoint dans le processus `db` |
 | Persistance PostgreSQL | `down` sans `-v` puis `up` | données conservées |
 | Utilisateur / shell | `docker image inspect`, `docker run --entrypoint sh` | `65532:65532` ; `sh` introuvable |
 | Workflow | `actionlint` 1.7.12 (avec shellcheck) | 0 erreur |
-| Services healthy | `docker compose up -d --no-build --wait` avec `API_IMAGE` et identifiants générés, comme la CI | `api-python` et `db` healthy ; `api-python` exécute l'Image ID audité |
+| Services healthy | `docker compose up -d --no-build --wait` avec `API_IMAGE`, identifiants générés et secret `secrets/db_password` en 0644, comme la CI | `api-python` et `db` healthy ; `api-python` exécute l'Image ID audité |
 | Tests d'intégration | `pytest -m integration tests/integration` | 3 passed |
 | Isolation | connexion à `db:5432` depuis le réseau `frontend` | nom `db` non résolu |
 | Smoke test release | image seule, `GET /health` | 200 `{"status":"ok"}` |

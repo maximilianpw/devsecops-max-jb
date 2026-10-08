@@ -1,4 +1,5 @@
-# date: 2026-10-08T12:52:49Z
+# date: 2026-10-08T13:14:19Z
+# image: flask-api:local sha256:21609806331b30327a113e7b0201eb81e547380af587d1fd35a33314c1fc6589
 # cmd: trivy image --platform linux/amd64 flask-api:local (toutes sévérités)
 # Version: 0.75.0
 # Vulnerability DB:
