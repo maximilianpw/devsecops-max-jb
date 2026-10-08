@@ -13,11 +13,10 @@ publiée sur GHCR par GitHub Actions
 L'API est servie par gunicorn sur le port 5000 et lit `DB_HOST`, `DB_PORT`,
 `DB_NAME`, `DB_USER` et `DB_PASSWORD`.
 
-> **État du rapport.** Les sections marquées _« À compléter »_ attendent la
-> mise à jour de `docker-compose.yml` (PostgreSQL Chainguard, healthchecks) ou
-> la première release. Les preuves détaillées de la stack sont dans
-> [`evidence/`](evidence/) (apportées par la PR #1). Aucune valeur n'est
-> inventée : chaque mesure indique sa date, sa commande et la version de l'outil.
+> **État du rapport.** Les sections marquées _« À compléter »_ attendent le
+> premier run CI vert ou la première release. Les sorties brutes des outils
+> sont dans [`evidence/`](evidence/). Aucune valeur n'est inventée : chaque
+> mesure indique sa date, sa commande et la version de l'outil.
 
 ## 1. Packages GHCR publics
 
@@ -62,12 +61,27 @@ OpenSSL, Kerberos…). Ce n'est donc pas une garantie d'absence totale de CVE.
 Conditions de mesure : 2026-10-08, Docker 29.5.3 (containerd image store),
 images `linux/amd64` construites en émulation sur un hôte arm64 avec
 `docker buildx build --platform linux/amd64 --provenance=false --sbom=false`.
-« Avant » = commit `fde7f07` (`main`), « après » = commit `5918246` (PR #1).
+« Avant » = commit `fde7f07` (`main`), « après » = branche `feat/harden-stack`.
 Dive 0.13.1 avec [`.dive-ci`](.dive-ci), Trivy 0.75.0 sur l'archive
 `docker save`.
 
-_À compléter : image PostgreSQL avant (`postgres:14-alpine`) / après
-(Chainguard)._
+Image PostgreSQL, mêmes conditions de mesure :
+
+| Critère | Avant | Après |
+| --- | --- | --- |
+| Image | `postgres:14-alpine` (Alpine 3.24.2, tag mouvant) | `cgr.dev/chainguard/postgres` (Wolfi), épinglée par digest |
+| Version | PostgreSQL 14.24 | PostgreSQL 18.6 |
+| Taille décompressée (Dive) | 284,6 MB | 379,4 MB |
+| Efficacité Dive | 99,89 % | 99,86 % |
+| Port publié sur l'hôte | `5432:5432` | aucun (réseau `backend` interne) |
+| Utilisateur | démarre en root, serveur sous `postgres` (uid 70) via `gosu` | démarre en root (`User: 0`), serveur sous uid 70 |
+| Shell | oui (`sh`, `bash`) | oui (`sh`, `bash`), requis par le script d'entrée de l'image |
+| CVE, toutes sévérités | 47 : 1 CRITICAL, 21 HIGH, 22 MEDIUM, 2 LOW, 1 UNKNOWN | 0 détectée |
+| HIGH/CRITICAL corrigibles | 22 (toutes dans le binaire Go `gosu`) | 0 |
+
+L'image Chainguard est plus lourde, car elle embarque PostgreSQL 18 et ses
+outils. Elle garde un shell pour son script d'initialisation, mais Compose
+n'en dépend pas : son healthcheck est en forme exec (§ 4).
 
 ## 3. Images de base
 
@@ -155,16 +169,27 @@ contre une future exception trop large. Test sur une copie du dépôt avec
 
 ## 4. Runtime sans shell
 
-_À compléter : healthchecks exec de l'API et de PostgreSQL (sans
-`sh`/`curl`), ordre de démarrage (`depends_on: condition: service_healthy`)._
-L'image API ne contient ni shell ni `curl`. Son healthcheck doit donc appeler
-l'interpréteur Python du venv en forme exec, par exemple :
+Les deux healthchecks de [`docker-compose.yml`](docker-compose.yml) sont en
+forme exec (`CMD`), sans `CMD-SHELL` : aucun shell n'est nécessaire.
 
-```yaml
-healthcheck:
-  test: ["CMD", "/app/venv/bin/python", "-c",
-         "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=2)"]
-```
+- **API** : l'image ne contient ni shell ni `curl`. Le healthcheck appelle le
+  Python du venv :
+  `["CMD", "/app/venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=3)"]`.
+  Une réponse non 2xx ou un délai dépassé lève une exception, donc un code de
+  sortie non nul.
+- **PostgreSQL** : `["CMD", "/usr/bin/pg_isready", "-h", "127.0.0.1", "-U", …, "-d", …]`.
+  `-h 127.0.0.1` est nécessaire, car le socket Unix de l'image Chainguard
+  n'est pas au chemin attendu par défaut par `pg_isready`. Utilisateur et base
+  sont interpolés par Compose depuis `DB_USER` et `DB_NAME`.
+- **Démarrage** : `api-python` attend `db` avec
+  `depends_on: condition: service_healthy`.
+- **Réseaux** : `db` n'est que sur `backend` (`internal: true`, sans accès
+  sortant) ; `api-python` est sur `backend` et `frontend`. Depuis un conteneur
+  du réseau `frontend`, `db` n'est pas résolu (vérifié). L'API n'est publiée
+  que sur `127.0.0.1:5000`.
+- **Identifiants** : lus depuis `DB_USER`, `DB_NAME` et `DB_PASSWORD`, communs
+  à l'API et à PostgreSQL. `DB_PASSWORD` est obligatoire (Compose refuse de
+  démarrer sans), voir [`.env.example`](.env.example).
 
 La CI démarre la stack avec `docker compose up -d --no-build --wait
 --wait-timeout 120`, puis exige l'état `healthy` explicite des deux services.
@@ -225,14 +250,13 @@ Choix des versions :
 - **gunicorn 26.2.0** : remplace le serveur de développement Flask.
 - **blinker, click, itsdangerous, Jinja2, MarkupSafe** : dépendances de Flask,
   désormais épinglées.
-- **pytest** et ses dépendances : retirés de l'image (15 → 9 paquets).
+- **pytest** et ses dépendances : retirés de l'image (15 → 9 paquets,
+  vérifié par `importlib.metadata` dans l'image finale).
 
 Compatibilité : les tests unitaires passent en Python 3.14 avec ces
 dépendances. Les tests d'intégration HTTP passent contre l'image finale,
-lors d'un test local avec un Compose temporaire conforme au contrat et
-PostgreSQL 14 (`postgres:14-alpine`). Base
-arrêtée, `/dbtest` renvoie le 500 générique. _À compléter : même vérification
-avec PostgreSQL Chainguard._
+démarrée par le Compose du dépôt avec PostgreSQL Chainguard 18.6. Image
+lancée seule, sans base, `/dbtest` renvoie le 500 générique.
 
 ## 6. Sécurité CI/CD
 
@@ -276,9 +300,10 @@ Hadolint + pinning ───────┘                   └─ Compose + p
   `highestUserWastedPercent: 0.1` (défaut Dive rendu explicite),
   `highestWastedBytes: disabled`. Le défaut implicite de Dive pour
   l'efficacité (0.9) n'est donc pas appliqué.
-- **Trivy** : gate sur l'archive de l'image et sur les manifestes Python
+- **Trivy** : gate sur l'archive de l'image et sur `requirements.txt`
   (`HIGH,CRITICAL`, `--ignore-unfixed`, `--exit-code 1`), sans liste
-  d'exclusion. Les rapports complets (toutes sévérités) sont archivés même en
+  d'exclusion. Trivy ne reconnaît pas `requirements-dev.txt` ; ces outils ne
+  sont pas embarqués dans l'image. Les rapports complets (toutes sévérités) sont archivés même en
   cas d'échec. Un gate vert signifie « aucune HIGH/CRITICAL corrigible », pas
   « zéro CVE ».
 - **Intégration** : nom de projet Compose unique par run, identifiants de
@@ -314,14 +339,16 @@ mention contraire. Les preuves CI seront ajoutées après le premier run vert.
 | Flake8 | `flake8 --config=.flake8 app.py test_app.py tests scripts` (flake8 7.4.1, Python 3.14) | 0 violation |
 | Tests unitaires | `pytest -m "not integration"` (pytest 9.1.1, Python 3.14) | 3 passed |
 | Hadolint | `hadolint --config .hadolint.yaml Dockerfile` (2.15.1) | 0 alerte, y compris au seuil `info` |
-| Pinning | `scripts/ci/check_pinning.py` | Dockerfile conforme ; _Compose : à compléter_ |
+| Pinning | `scripts/ci/check_pinning.py` | Dockerfile, Compose et actions conformes |
 | Dive ≥ 80 % | `dive --ci --ci-config .dive-ci` (0.13.1) | PASS : 99,73 %, 0,48 % d'octets gaspillés |
 | Trivy image | gate HIGH/CRITICAL corrigibles (0.75.0) | 0 ; rapport complet : 0 CVE détectée |
-| Trivy dépendances | `trivy fs` sur `requirements*.txt` | 0 |
+| Trivy dépendances | `trivy fs` (détecte `requirements.txt`) | 0 |
 | Utilisateur / shell | `docker image inspect`, `docker run --entrypoint sh` | `65532:65532` ; `sh` introuvable |
 | Workflow | `actionlint` 1.7.12 (avec shellcheck) | 0 erreur |
-| Tests d'intégration | `pytest -m integration tests/integration` | _À compléter (run CI avec le Compose final)_ |
-| Services healthy | job `Compose + pytest` | _À compléter_ |
+| Services healthy | `docker compose up -d --no-build --wait` avec `API_IMAGE` et identifiants générés, comme la CI | `api-python` et `db` healthy ; `api-python` exécute l'Image ID audité |
+| Tests d'intégration | `pytest -m integration tests/integration` | 3 passed |
+| Isolation | connexion à `db:5432` depuis le réseau `frontend` | nom `db` non résolu |
+| Smoke test release | image seule, `GET /health` | 200 `{"status":"ok"}` |
 | Publication | jobs `Release GHCR` + `Pull public + smoke test` | _À compléter_ |
 
 Preuves détaillées de la stack ([`evidence/`](evidence/)) :
@@ -366,6 +393,7 @@ trivy image --input image.tar --scanners vuln \
   --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1
 
 # Stack réelle et tests HTTP
+cp .env.example .env   # puis changer DB_PASSWORD (valeurs locales uniquement)
 export API_IMAGE=flask-api:local
 docker compose up -d --no-build --wait --wait-timeout 120
 pytest -m integration tests/integration
@@ -377,8 +405,9 @@ Variables :
 | Variable | Rôle | Défaut |
 | --- | --- | --- |
 | `API_IMAGE` | Image API utilisée par Compose | `flask-api:local` |
-| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER` | Connexion de l'API à PostgreSQL | voir `docker-compose.yml` |
+| `DB_USER`, `DB_NAME` | Utilisateur et base, communs à l'API et à PostgreSQL | `testuser`, `testdb` |
 | `DB_PASSWORD` | Mot de passe PostgreSQL, obligatoire | aucun |
+| `DB_HOST`, `DB_PORT` | Fixés par Compose | `db`, `5432` |
 | `API_BASE_URL` | Cible des tests d'intégration | `http://127.0.0.1:5000` |
 | `API_TIMEOUT_SECONDS` | Timeout réseau des tests d'intégration | `5` |
 

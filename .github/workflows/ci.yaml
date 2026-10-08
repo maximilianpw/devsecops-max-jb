@@ -206,7 +206,7 @@ jobs:
             --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 \
             --format table
 
-      - name: Gate dépendances Python (requirements*.txt)
+      - name: Gate dépendances runtime (requirements.txt)
         if: ${{ !cancelled() }}
         run: |
           trivy fs --scanners vuln --skip-db-update --skip-dirs dist,reports \
