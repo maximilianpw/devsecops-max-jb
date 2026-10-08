@@ -79,8 +79,9 @@ services:
       retries: 5
       start_period: 30s
 
-# Mot de passe monté en fichier (/run/secrets/db_password) : il n'apparaît ni dans
-# `docker inspect` ni dans l'environnement des processus. Source `file:` obligatoire,
+# Mot de passe monté en fichier (/run/secrets/db_password) : absent de `docker inspect`
+# et de l'environnement de l'API. L'entrypoint PostgreSQL le réexporte toutefois en
+# POSTGRES_PASSWORD dans son propre processus (UID 70). Source `file:` obligatoire,
 # Compose refuse de copier un secret `environment:` dans un conteneur read_only.
 # Fichier non versionné (secrets/), généré en CI, lisible par les UID 65532 et 70.
 secrets:

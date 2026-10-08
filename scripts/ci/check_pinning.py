@@ -6,8 +6,9 @@
   Chainguard (cgr.dev/chainguard/postgres). Le service API est exempté car son
   image est celle construite par la CI (API_IMAGE).
 - Compose (durcissement) : chaque service est en lecture seule, sans
-  capability, sans élévation de privilèges, avec limites mémoire et PID, et ne
-  reçoit le mot de passe que comme secret fichier.
+  capability, sans élévation de privilèges, avec limites mémoire et PID, sans
+  `env_file` (non contrôlable ici) et ne reçoit le mot de passe que comme
+  secret fichier (clé contenant PASSWORD sans suffixe _FILE refusée).
 - Workflows : chaque action externe est référencée par un SHA de commit complet.
 
 Usage :
@@ -29,6 +30,12 @@ DOCKER_ACTION_RE = re.compile(r"^docker://[^@\s]+@sha256:[0-9a-f]{64}$")
 CHAINGUARD_POSTGRES = "cgr.dev/chainguard/postgres"
 API_SERVICE = "api-python"
 DB_SERVICE = "db"
+# Formes acceptées par Docker pour la même option.
+NO_NEW_PRIVILEGES = {
+    "no-new-privileges",
+    "no-new-privileges:true",
+    "no-new-privileges=true",
+}
 
 
 def logical_lines(text):
@@ -106,12 +113,17 @@ def check_hardening(config):
             errors.append(f"compose: {name} doit avoir cap_drop: [ALL]")
         if service.get("cap_add"):
             errors.append(f"compose: {name} ne doit ajouter aucune capability")
-        if "no-new-privileges:true" not in service.get("security_opt", []):
+        if not NO_NEW_PRIVILEGES.intersection(service.get("security_opt", [])):
             errors.append(f"compose: {name} doit activer no-new-privileges")
         if not service.get("mem_limit") or not service.get("pids_limit"):
             errors.append(f"compose: {name} doit fixer mem_limit et pids_limit")
         if service.get("privileged"):
             errors.append(f"compose: {name} ne doit pas être privileged")
+        if service.get("env_file"):
+            errors.append(
+                f"compose: {name} ne doit pas utiliser env_file (variables non "
+                "contrôlées, risque de mot de passe en clair)"
+            )
         # --no-interpolate garde la forme d'origine : liste "K=V" ou dictionnaire.
         environment = service.get("environment") or {}
         if isinstance(environment, list):

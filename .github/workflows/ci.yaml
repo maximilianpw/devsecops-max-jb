@@ -217,6 +217,7 @@ jobs:
         if: ${{ !cancelled() }}
         # Image lue depuis docker-compose.yml : le scan suit le digest déployé.
         run: |
+          mkdir -p reports  # absent si l'étape des rapports complets a échoué
           db_image="$(docker compose config --no-interpolate --format json \
             | jq -r '.services.db.image')"
           echo "Image DB : $db_image"
