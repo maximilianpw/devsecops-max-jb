@@ -11,7 +11,8 @@ publiée sur GHCR par GitHub Actions
 | `GET /dbtest` | 200 `{"db_connection":"successful"}` si `SELECT 1` réussit, sinon 500 `{"db_connection":"failed"}` |
 
 L'API est servie par gunicorn sur le port 5000 et lit `DB_HOST`, `DB_PORT`,
-`DB_NAME`, `DB_USER` et `DB_PASSWORD`.
+`DB_NAME`, `DB_USER` et `DB_PASSWORD_FILE` (fichier secret), ou `DB_PASSWORD`
+à défaut.
 
 > **État du rapport.** Release `v1.0.0` publiée par la CI le 2026-10-08
 > ([run 37777799398](https://github.com/maximilianpw/devsecops-max-jb/actions/runs/37777799398)). Les sorties brutes des mesures locales
@@ -133,7 +134,10 @@ Contraintes vérifiées automatiquement par la CI
 - chaque `FROM` du Dockerfile est épinglé par `@sha256:` ;
 - PostgreSQL utilise `cgr.dev/chainguard/postgres@sha256:…` et ne publie
   aucun port ;
-- l'API utilise `image: ${API_IMAGE:-flask-api:local}`.
+- l'API utilise `image: ${API_IMAGE:-flask-api:local}` ;
+- chaque service Compose est durci (`read_only`, `cap_drop: [ALL]`,
+  `no-new-privileges`, `mem_limit`, `pids_limit`, ni `cap_add` ni
+  `privileged`) et ne reçoit aucun mot de passe en variable d'environnement.
 
 ### Construction du Dockerfile
 
@@ -193,9 +197,36 @@ forme exec (`CMD`), sans `CMD-SHELL` : aucun shell n'est nécessaire.
   sortant) ; `api-python` est sur `backend` et `frontend`. Depuis un conteneur
   du réseau `frontend`, `db` n'est pas résolu (vérifié). L'API n'est publiée
   que sur `127.0.0.1:5000`.
-- **Identifiants** : lus depuis `DB_USER`, `DB_NAME` et `DB_PASSWORD`, communs
-  à l'API et à PostgreSQL. `DB_PASSWORD` est obligatoire (Compose refuse de
-  démarrer sans), voir [`.env.example`](.env.example).
+- **Identifiants** : `DB_USER` et `DB_NAME` (variables, voir
+  [`.env.example`](.env.example)) sont communs à l'API et à PostgreSQL. Le mot
+  de passe est un secret Compose de type fichier : `secrets/db_password` (non
+  versionné) est monté en `/run/secrets/db_password` et lu via
+  `DB_PASSWORD_FILE` (API) et `POSTGRES_PASSWORD_FILE` (PostgreSQL). Il
+  n'apparaît ni dans `docker inspect` ni dans l'environnement des processus.
+  Sans ce fichier, `docker compose up` échoue (`bind source path does not
+  exist`). La source `file:` est imposée : Compose refuse de copier un secret
+  `environment:` dans un conteneur `read_only`. Le fichier garde l'UID de
+  l'hôte et doit être lisible par les UID 65532 et 70, d'où le mode `0644`.
+
+### Durcissement Compose
+
+Une ancre `x-hardening` est appliquée aux deux services :
+
+| Mesure | `api-python` | `db` |
+| --- | --- | --- |
+| Système de fichiers | `read_only`, tmpfs `/tmp` | `read_only`, tmpfs `/tmp` et `/var/run/postgresql` |
+| Capabilities | `cap_drop: [ALL]` | `cap_drop: [ALL]` |
+| Élévation de privilèges | `no-new-privileges:true` | `no-new-privileges:true` |
+| Utilisateur | `65532:65532` (image) | `70:70` (forcé) |
+| Ressources | `mem_limit: 256m`, `pids_limit: 64` | `mem_limit: 512m`, `pids_limit: 128`, `shm_size: 128m` |
+
+L'image PostgreSQL Chainguard démarre en root pour faire un `chown` du
+répertoire de données, ce que `cap_drop: [ALL]` interdit. Le service tourne
+donc directement en UID 70 (`postgres`) et le volume est monté sur
+`/var/lib/postgresql`, parent de `PGDATA` (`/var/lib/postgresql/data`) qui
+appartient déjà à cet utilisateur : `initdb` crée `PGDATA` sans `chown`. Le
+volume s'appelle désormais `db-data` ; un ancien volume `db-data-test` est
+à supprimer (`docker volume rm <projet>_db-data-test`).
 
 La CI démarre la stack avec `docker compose up -d --no-build --wait
 --wait-timeout 120`, puis exige l'état `healthy` explicite des deux services.
@@ -218,7 +249,8 @@ tests passent aussi en `flake8 --isolated --max-line-length 88`. Le fichier
 | Connexion et curseur PostgreSQL non fermés en cas d'erreur | `contextlib.closing` les ferme dans tous les cas |
 | Message d'erreur brut (hôte, utilisateur, base) renvoyé au client | réponse fixe `{"db_connection": "failed"}` ; le détail part dans les logs |
 | `except Exception` trop large | seules les erreurs `psycopg2.Error` sont attrapées |
-| Mot de passe par défaut `testpass` dans le code | plus de valeur par défaut : `DB_PASSWORD` doit être fourni |
+| Mot de passe par défaut `testpass` dans le code | plus de valeur par défaut : `DB_PASSWORD_FILE` ou `DB_PASSWORD` doit être fourni |
+| Mot de passe visible dans l'environnement du conteneur | lu depuis le fichier `DB_PASSWORD_FILE` s'il est défini (prioritaire sur `DB_PASSWORD`) ; fichier absent = échec au démarrage |
 | Base injoignable bloquant la requête | délai de connexion de 5 secondes |
 | `app.run(host="0.0.0.0")` : serveur de développement | supprimé, gunicorn sert l'API |
 
@@ -306,14 +338,16 @@ Hadolint + pinning ───────┘                   └─ Compose + p
   `highestUserWastedPercent: 0.1` (défaut Dive rendu explicite),
   `highestWastedBytes: disabled`. Le défaut implicite de Dive pour
   l'efficacité (0.9) n'est donc pas appliqué.
-- **Trivy** : gate sur l'archive de l'image et sur `requirements.txt`
-  (`HIGH,CRITICAL`, `--ignore-unfixed`, `--exit-code 1`), sans liste
-  d'exclusion. Trivy ne reconnaît pas `requirements-dev.txt` ; ces outils ne
+- **Trivy** : gate sur l'archive de l'image, sur `requirements.txt` et sur
+  l'image PostgreSQL (digest lu dans `docker-compose.yml`, scannée depuis le
+  registre) avec `HIGH,CRITICAL`, `--ignore-unfixed`, `--exit-code 1`, sans
+  liste d'exclusion. Trivy ne reconnaît pas `requirements-dev.txt` ; ces outils ne
   sont pas embarqués dans l'image. Les rapports complets (toutes sévérités) sont archivés même en
   cas d'échec. Un gate vert signifie « aucune HIGH/CRITICAL corrigible », pas
   « zéro CVE ».
 - **Intégration** : nom de projet Compose unique par run, identifiants de
-  base générés et masqués à chaque run, logs collectés en cas d'échec,
+  base générés et masqués à chaque run (mot de passe écrit uniquement dans
+  `secrets/db_password`), logs collectés en cas d'échec,
   `docker compose down --volumes --remove-orphans` systématique.
 - **Release SemVer** :
   - tag strictement validé ;
@@ -369,12 +403,15 @@ Mesures locales du 2026-10-08 (hôte arm64, images `linux/amd64`).
 | Contrôle | Commande | Résultat |
 | --- | --- | --- |
 | Flake8 | `flake8 --config=.flake8 app.py test_app.py tests scripts` (flake8 7.4.1, Python 3.14) | 0 violation |
-| Tests unitaires | `pytest -m "not integration"` (pytest 9.1.1, Python 3.14) | 3 passed |
+| Tests unitaires | `pytest -m "not integration"` (pytest 9.1.1, Python 3.14) | 6 passed |
 | Hadolint | `hadolint --config .hadolint.yaml Dockerfile` (2.15.1) | 0 alerte, y compris au seuil `info` |
 | Pinning | `scripts/ci/check_pinning.py` | Dockerfile, Compose et actions conformes |
 | Dive ≥ 80 % | `dive --ci --ci-config .dive-ci` (0.13.1) | PASS : 99,73 %, 0,48 % d'octets gaspillés |
 | Trivy image | gate HIGH/CRITICAL corrigibles (0.75.0) | 0 ; rapport complet : 0 CVE détectée |
 | Trivy dépendances | `trivy fs` (détecte `requirements.txt`) | 0 |
+| Trivy PostgreSQL | gate HIGH/CRITICAL corrigibles sur l'image Chainguard (0.75.0) | 0 ; rapport complet : 0 CVE détectée |
+| Durcissement Compose | `docker inspect`, `/proc/1/status`, écriture sur `/` et `/app` | `ReadonlyRootfs`, `CapDrop: ALL`, `CapEff=0`, `NoNewPrivs=1`, mot de passe absent de l'environnement |
+| Persistance PostgreSQL | `down` sans `-v` puis `up` | données conservées |
 | Utilisateur / shell | `docker image inspect`, `docker run --entrypoint sh` | `65532:65532` ; `sh` introuvable |
 | Workflow | `actionlint` 1.7.12 (avec shellcheck) | 0 erreur |
 | Services healthy | `docker compose up -d --no-build --wait` avec `API_IMAGE` et identifiants générés, comme la CI | `api-python` et `db` healthy ; `api-python` exécute l'Image ID audité |
@@ -394,11 +431,13 @@ Preuves détaillées de la stack ([`evidence/`](evidence/)) :
 | [`after/image.txt`](evidence/after/image.txt) | taille, utilisateur, shell, binaires, permissions |
 | [`after/dive.txt`](evidence/after/dive.txt) | Dive en mode CI |
 | [`after/trivy.txt`](evidence/after/trivy.txt) | Trivy sur l'image finale |
+| [`after/trivy-db.txt`](evidence/after/trivy-db.txt) | Trivy sur l'image PostgreSQL Chainguard, et gate HIGH/CRITICAL |
 | [`after/trivy-deps.txt`](evidence/after/trivy-deps.txt) | Trivy sur `requirements.txt` (renommé : Dependabot lisait l'ancien nom `*requirements*.txt` comme un manifeste pip) |
 | [`after/build-cache.txt`](evidence/after/build-cache.txt) | cache des dépendances conservé après modification du code |
 | [`after/runtime-compat.txt`](evidence/after/runtime-compat.txt) | même Python, ABI et glibc entre build et image finale |
 | [`after/image-run.txt`](evidence/after/image-run.txt) | démarrage en lecture seule |
 | [`after/app-functional.txt`](evidence/after/app-functional.txt) | endpoints contre PostgreSQL |
+| [`after/compose-hardening.txt`](evidence/after/compose-hardening.txt) | stack Compose durcie : secret absent, healthy, capabilities, lecture seule, intégration, persistance |
 
 ## Reproduction locale
 
@@ -425,7 +464,10 @@ trivy image --input image.tar --scanners vuln \
   --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1
 
 # Stack réelle et tests HTTP
-cp .env.example .env   # puis changer DB_PASSWORD (valeurs locales uniquement)
+cp .env.example .env   # DB_USER / DB_NAME (valeurs locales uniquement)
+install -d -m 0755 secrets
+openssl rand -hex 24 | tr -d '\n' > secrets/db_password
+chmod 0644 secrets/db_password   # lu par les UID 65532 (API) et 70 (PostgreSQL)
 export API_IMAGE=flask-api:local
 docker compose up -d --no-build --wait --wait-timeout 120
 pytest -m integration tests/integration
@@ -438,7 +480,9 @@ Variables :
 | --- | --- | --- |
 | `API_IMAGE` | Image API utilisée par Compose | `flask-api:local` |
 | `DB_USER`, `DB_NAME` | Utilisateur et base, communs à l'API et à PostgreSQL | `testuser`, `testdb` |
-| `DB_PASSWORD` | Mot de passe PostgreSQL, obligatoire | aucun |
+| `secrets/db_password` | Fichier du mot de passe PostgreSQL, obligatoire, non versionné | aucun |
+| `DB_PASSWORD_FILE` | Lu par l'API, prioritaire sur `DB_PASSWORD` ; fixé par Compose | `/run/secrets/db_password` |
+| `DB_PASSWORD` | Repli de l'API hors Compose (ex. exécution directe) | aucun |
 | `DB_HOST`, `DB_PORT` | Fixés par Compose | `db`, `5432` |
 | `API_BASE_URL` | Cible des tests d'intégration | `http://127.0.0.1:5000` |
 | `API_TIMEOUT_SECONDS` | Timeout réseau des tests d'intégration | `5` |

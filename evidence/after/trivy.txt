@@ -1,12 +1,13 @@
-# date: 2026-10-08T11:49:53Z
+# date: 2026-10-08T12:52:49Z
 # cmd: trivy image --platform linux/amd64 flask-api:local (toutes sévérités)
-# Version: 0.74.0
+# Version: 0.75.0
 # Vulnerability DB:
 #   Version: 2
 #   UpdatedAt: 2026-10-07 07:38:55.515026687 +0000 UTC
 #   NextUpdate: 2026-10-08 07:38:55.515026457 +0000 UTC
-#   DownloadedAt: 2026-10-08 11:33:38.632234 +0000 UTC
+#   DownloadedAt: 2026-10-08 12:52:32.067670792 +0000 UTC
 # exit: 0
+
 
 Report Summary
 
@@ -37,6 +38,3 @@ Legend:
 - '-': Not scanned
 - '0': Clean (no security findings detected)
 
-
-# barrière : trivy image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 flask-api:local
-# exit: 0

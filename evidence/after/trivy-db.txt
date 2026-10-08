@@ -1,0 +1,41 @@
+# date: 2026-10-08T12:52:40Z
+# cmd: trivy image --image-src remote --platform linux/amd64 cgr.dev/chainguard/postgres@sha256:0c4eaf6cb9bd65337d834f5ebfe79add4312ee2125ab584bf1fbc071abc6bb8f (toutes sévérités)
+# Version: 0.75.0
+# Vulnerability DB:
+#   Version: 2
+#   UpdatedAt: 2026-10-07 07:38:55.515026687 +0000 UTC
+#   NextUpdate: 2026-10-08 07:38:55.515026457 +0000 UTC
+#   DownloadedAt: 2026-10-08 12:52:32.067670792 +0000 UTC
+# exit: 0
+
+
+Report Summary
+
+┌──────────────────────────────────────────────────────────────────────────────────┬───────┬─────────────────┬─────────┐
+│                                      Target                                      │ Type  │ Vulnerabilities │ Secrets │
+├──────────────────────────────────────────────────────────────────────────────────┼───────┼─────────────────┼─────────┤
+│ cgr.dev/chainguard/postgres@sha256:0c4eaf6cb9bd65337d834f5ebfe79add4312ee2125ab- │ wolfi │        0        │    -    │
+│ 584bf1fbc071abc6bb8f (wolfi 20230201)                                            │       │                 │         │
+└──────────────────────────────────────────────────────────────────────────────────┴───────┴─────────────────┴─────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+
+
+## gate HIGH/CRITICAL corrigibles
+# cmd: trivy image --platform linux/amd64 --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 <image ci-dessus>
+# exit: 0
+
+
+Report Summary
+
+┌──────────────────────────────────────────────────────────────────────────────────┬───────┬─────────────────┬─────────┐
+│                                      Target                                      │ Type  │ Vulnerabilities │ Secrets │
+├──────────────────────────────────────────────────────────────────────────────────┼───────┼─────────────────┼─────────┤
+│ cgr.dev/chainguard/postgres@sha256:0c4eaf6cb9bd65337d834f5ebfe79add4312ee2125ab- │ wolfi │        0        │    -    │
+│ 584bf1fbc071abc6bb8f (wolfi 20230201)                                            │       │                 │         │
+└──────────────────────────────────────────────────────────────────────────────────┴───────┴─────────────────┴─────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+
