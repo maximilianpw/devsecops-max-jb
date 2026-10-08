@@ -5,6 +5,10 @@
 - Compose : chaque image externe est épinglée par digest ; PostgreSQL vient de
   Chainguard (cgr.dev/chainguard/postgres). Le service API est exempté car son
   image est celle construite par la CI (API_IMAGE).
+- Compose (durcissement) : chaque service est en lecture seule, sans
+  capability, sans élévation de privilèges, avec limites mémoire et PID, sans
+  `env_file` (non contrôlable ici) et ne reçoit le mot de passe que comme
+  secret fichier (clé contenant PASSWORD sans suffixe _FILE refusée).
 - Workflows : chaque action externe est référencée par un SHA de commit complet.
 
 Usage :
@@ -26,6 +30,12 @@ DOCKER_ACTION_RE = re.compile(r"^docker://[^@\s]+@sha256:[0-9a-f]{64}$")
 CHAINGUARD_POSTGRES = "cgr.dev/chainguard/postgres"
 API_SERVICE = "api-python"
 DB_SERVICE = "db"
+# Formes acceptées par Docker pour la même option.
+NO_NEW_PRIVILEGES = {
+    "no-new-privileges",
+    "no-new-privileges:true",
+    "no-new-privileges=true",
+}
 
 
 def logical_lines(text):
@@ -94,6 +104,40 @@ def check_compose(config):
     return errors
 
 
+def check_hardening(config):
+    errors = []
+    for name, service in sorted(config.get("services", {}).items()):
+        if service.get("read_only") is not True:
+            errors.append(f"compose: {name} doit être read_only")
+        if [c.upper() for c in service.get("cap_drop", [])] != ["ALL"]:
+            errors.append(f"compose: {name} doit avoir cap_drop: [ALL]")
+        if service.get("cap_add"):
+            errors.append(f"compose: {name} ne doit ajouter aucune capability")
+        if not NO_NEW_PRIVILEGES.intersection(service.get("security_opt", [])):
+            errors.append(f"compose: {name} doit activer no-new-privileges")
+        if not service.get("mem_limit") or not service.get("pids_limit"):
+            errors.append(f"compose: {name} doit fixer mem_limit et pids_limit")
+        if service.get("privileged"):
+            errors.append(f"compose: {name} ne doit pas être privileged")
+        if service.get("env_file"):
+            errors.append(
+                f"compose: {name} ne doit pas utiliser env_file (variables non "
+                "contrôlées, risque de mot de passe en clair)"
+            )
+        # --no-interpolate garde la forme d'origine : liste "K=V" ou dictionnaire.
+        environment = service.get("environment") or {}
+        if isinstance(environment, list):
+            keys = [item.split("=", 1)[0] for item in environment]
+        else:
+            keys = list(environment)
+        if any("PASSWORD" in key and not key.endswith("_FILE") for key in keys):
+            errors.append(
+                f"compose: {name} reçoit un mot de passe en variable "
+                "d'environnement (utiliser un secret *_FILE)"
+            )
+    return errors
+
+
 def check_workflows(directory):
     errors = []
     uses_re = re.compile(r"^\s*(?:-\s*)?uses:\s*['\"]?([^'\"\s#]+)")
@@ -134,14 +178,18 @@ def main():
     errors = (
         check_dockerfile(options.dockerfile)
         + check_compose(compose)
+        + check_hardening(compose)
         + check_workflows(options.workflows)
     )
     for error in errors:
         print(f"::error::{error}")
     if errors:
-        print(f"{len(errors)} violation(s) de pinning.", file=sys.stderr)
+        print(
+            f"{len(errors)} violation(s) de pinning ou de durcissement.",
+            file=sys.stderr,
+        )
         return 1
-    print("Pinning OK : Dockerfile, Compose et actions sont immuables.")
+    print("Pinning OK : Dockerfile, Compose et actions sont immuables ; Compose durci.")
     return 0
 
 

@@ -2,7 +2,7 @@
 
 import pytest
 
-from app import app
+from app import app, read_db_password
 
 
 @pytest.fixture
@@ -30,3 +30,26 @@ def test_unknown_route_returns_404(client):
     res = client.get("/does-not-exist")
 
     assert res.status_code == 404
+
+
+def test_db_password_read_from_secret_file(tmp_path, monkeypatch):
+    secret = tmp_path / "db_password"
+    secret.write_text("from-file\n", encoding="utf-8")
+    monkeypatch.setenv("DB_PASSWORD_FILE", str(secret))
+    monkeypatch.setenv("DB_PASSWORD", "from-env")
+
+    assert read_db_password() == "from-file"
+
+
+def test_db_password_falls_back_to_env(monkeypatch):
+    monkeypatch.delenv("DB_PASSWORD_FILE", raising=False)
+    monkeypatch.setenv("DB_PASSWORD", "from-env")
+
+    assert read_db_password() == "from-env"
+
+
+def test_db_password_missing_file_fails_fast(tmp_path, monkeypatch):
+    monkeypatch.setenv("DB_PASSWORD_FILE", str(tmp_path / "absent"))
+
+    with pytest.raises(FileNotFoundError):
+        read_db_password()

@@ -1,5 +1,7 @@
-# date: 2026-10-08T11:48:25Z
+# date: 2026-10-08T13:13:55Z (fin du test ; copie du dépôt dans /tmp, app.py du dépôt non modifié)
+# image de référence : flask-api:local sha256:21609806331b30327a113e7b0201eb81e547380af587d1fd35a33314c1fc6589 (build de la copie avant modification identique)
 # contrôle du cache : rebuild après modification de app.py seul
+# cmd: docker buildx build --platform linux/amd64 --provenance=false --sbom=false --load --progress=plain -t flask-api:cachetest .
 #1 [internal] load build definition from Dockerfile
 #2 [internal] load metadata for cgr.dev/chainguard/python@sha256:b6248c85ba9b97e1e61b30197f309cc4d21661f889fefa5268f0a7bc530dad46
 #3 [internal] load metadata for cgr.dev/chainguard/python@sha256:894aed3297d91283e1fc4c542f5374a4b5f3726134fda7c94eaa539342be1e05
@@ -7,11 +9,11 @@
 #5 [builder 1/4] FROM cgr.dev/chainguard/python@sha256:894aed3297d91283e1fc4c542f5374a4b5f3726134fda7c94eaa539342be1e05
 #6 [stage-1 1/4] FROM cgr.dev/chainguard/python@sha256:b6248c85ba9b97e1e61b30197f309cc4d21661f889fefa5268f0a7bc530dad46
 #7 [internal] load build context
-#8 [builder 2/4] WORKDIR /app
+#8 [builder 3/4] COPY requirements.txt /app/requirements.txt
 #8 CACHED
-#9 [builder 3/4] COPY requirements.txt /app/requirements.txt
+#9 [builder 4/4] RUN python -m venv --without-pip /app/venv     && pip --python /app/venv/bin/python install --no-cache-dir -r /app/requirements.txt
 #9 CACHED
-#10 [builder 4/4] RUN python -m venv --without-pip /app/venv     && pip --python /app/venv/bin/python install --no-cache-dir -r /app/requirements.txt
+#10 [builder 2/4] WORKDIR /app
 #10 CACHED
 #11 [stage-1 2/4] COPY --from=builder --chown=0:0 /app/venv /app/venv
 #11 CACHED

@@ -1,26 +1,60 @@
-# date: 2026-10-08T11:42:55Z
-# contrôle fonctionnel : app.py + requirements.txt servis par gunicorn sur cgr.dev/chainguard/python:latest-dev (linux/amd64), PostgreSQL postgres:14-alpine (image du docker-compose.yml initial)
-== postgres: postgres (PostgreSQL) 14.24
+# date: 2026-10-08T13:14:49Z
+# contrôle fonctionnel : image flask-api:local sha256:21609806331b30327a113e7b0201eb81e547380af587d1fd35a33314c1fc6589 (linux/amd64, Docker Desktop macOS arm64) servie par gunicorn dans la stack docker-compose.yml réelle (api-python + db, secret fichier)
+# variables : COMPOSE_PROJECT_NAME=functional-check API_IMAGE=flask-api:local DB_USER=ci_user DB_NAME=ci_db, --env-file /dev/null
+# cmd: docker compose --env-file /dev/null up -d --no-build --wait --wait-timeout 180
+ Network functional-check_backend Creating 
+ Network functional-check_backend Created 
+ Network functional-check_frontend Creating 
+ Network functional-check_frontend Created 
+ Volume functional-check_db-data Creating 
+ Volume functional-check_db-data Created 
+ Container functional-check-db-1 Creating 
+ db The requested image's platform (linux/amd64) does not match the detected host platform (linux/arm64/v8) and no specific platform was requested 
+ Container functional-check-db-1 Created 
+ Container functional-check-api-python-1 Creating 
+ api-python The requested image's platform (linux/amd64) does not match the detected host platform (linux/arm64/v8) and no specific platform was requested 
+ Container functional-check-api-python-1 Created 
+ Container functional-check-db-1 Starting 
+ Container functional-check-db-1 Started 
+ Container functional-check-db-1 Waiting 
+ Container functional-check-db-1 Healthy 
+ Container functional-check-api-python-1 Starting 
+ Container functional-check-api-python-1 Started 
+ Container functional-check-db-1 Waiting 
+ Container functional-check-api-python-1 Waiting 
+ Container functional-check-db-1 Healthy 
+ Container functional-check-api-python-1 Healthy 
+# exit: 0
+== image du conteneur api-python : sha256:21609806331b30327a113e7b0201eb81e547380af587d1fd35a33314c1fc6589
+== postgres: postgres (PostgreSQL) 18.6
 == python: Python 3.14.8
 == installed:
-blinker==1.9.0
-click==8.5.0
 Flask==3.1.3
-gunicorn==26.2.0
-itsdangerous==2.2.0
 Jinja2==3.1.6
 MarkupSafe==3.0.4
-psycopg2-binary==2.9.13
 Werkzeug==3.1.9
+blinker==1.9.0
+click==8.5.0
+gunicorn==26.2.0
+itsdangerous==2.2.0
+psycopg2-binary==2.9.13
 == GET /health -> 200 {"status":"ok"}
 == GET /hello -> 200 {"message":"Hello world"}
 == GET /dbtest -> 200 {"db_connection":"successful"}
-== pytest test_app.py (pytest installé uniquement pour ce contrôle)
-
--- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-3 passed, 1 warning in 0.23s
-== base arrêtée
+== pytest -m "not integration" (hôte, Python 3.14.6, pytest 9.1.1)
+============================= test session starts ==============================
+platform darwin -- Python 3.14.6, pytest-9.1.1, pluggy-1.6.0
+rootdir: /Users/jb/git/devsecops-max-jb
+configfile: pytest.ini
+testpaths: test_app.py, tests
+collected 9 items / 3 deselected / 6 selected
+test_app.py ......                                                       [100%]
+======================= 6 passed, 3 deselected in 0.08s ========================
+# exit: 0
+== base arrêtée (docker compose stop db)
+ Container functional-check-db-1 Stopping 
+ Container functional-check-db-1 Stopped 
 == GET /dbtest -> 500 {"db_connection":"failed"}
 == log serveur (détail conservé côté serveur) :
-[2026-10-08 11:43:12,107] ERROR in app: Database connectivity check failed
-psycopg2.OperationalError: could not translate host name "step2-db" to address: Name or service not known
+[2026-10-08 13:15:01,536] ERROR in app: Database connectivity check failed
+psycopg2.OperationalError: could not translate host name "db" to address: Name or service not known

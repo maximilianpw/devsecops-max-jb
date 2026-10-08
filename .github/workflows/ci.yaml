@@ -213,6 +213,21 @@ jobs:
             --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 \
             --format table .
 
+      - name: Gate image PostgreSQL (HIGH/CRITICAL corrigibles)
+        if: ${{ !cancelled() }}
+        # Image lue depuis docker-compose.yml : le scan suit le digest déployé.
+        run: |
+          mkdir -p reports  # absent si l'étape des rapports complets a échoué
+          db_image="$(docker compose config --no-interpolate --format json \
+            | jq -r '.services.db.image')"
+          echo "Image DB : $db_image"
+          trivy image --image-src remote --platform "$PLATFORM" --scanners vuln \
+            --skip-db-update --format json --output reports/trivy-db-full.json \
+            "$db_image"
+          trivy image --image-src remote --platform "$PLATFORM" --scanners vuln \
+            --skip-db-update --severity HIGH,CRITICAL --ignore-unfixed \
+            --exit-code 1 --format table "$db_image"
+
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ always() }}
         with:
@@ -256,13 +271,18 @@ jobs:
 
       - name: Identifiants éphémères de la base CI
         # Générés pour ce run uniquement, masqués dans les logs, jamais réutilisés.
+        # Le mot de passe ne sort pas du fichier secret monté par Compose ; mode
+        # 0644 car le fichier garde l'UID du runner et doit être lu par les UID
+        # 65532 (API) et 70 (PostgreSQL). Runner éphémère, sans autre utilisateur.
         run: |
           db_password="$(openssl rand -hex 24)"
           echo "::add-mask::$db_password"
+          install -d -m 0755 secrets
+          printf '%s' "$db_password" > secrets/db_password
+          chmod 0644 secrets/db_password
           {
             echo "DB_USER=ci_user"
             echo "DB_NAME=ci_db"
-            echo "DB_PASSWORD=$db_password"
           } >> "$GITHUB_ENV"
 
       - name: Démarrer la stack (image auditée, sans build)

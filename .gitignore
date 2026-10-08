@@ -1,3 +1,19 @@
+# Secrets et configuration locale (seul .env.example est versionné)
 .env
+.env.*
+!.env.example
+secrets/
+*.pem
+*.key
+
+# Python
 __pycache__/
+*.py[cod]
 .pytest_cache/
+.venv/
+venv/
+
+# Artefacts locaux (archives d'image, rapports CI)
+*.tar
+dist/
+reports/

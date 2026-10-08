@@ -1,5 +1,15 @@
+# Durcissement commun : système de fichiers en lecture seule, aucune capability,
+# pas d'élévation de privilèges (setuid/setgid inopérants).
+x-hardening: &hardening
+  read_only: true
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+
 services:
   api-python:
+    <<: *hardening
     # Image construite et auditée par la CI (API_IMAGE) ; `build` reste
     # disponible en local : `docker compose up --build` produit flask-api:local.
     image: ${API_IMAGE:-flask-api:local}
@@ -9,10 +19,18 @@ services:
     environment:
       - ENV=test
       - DB_USER=${DB_USER:-testuser}
-      - DB_PASSWORD=${DB_PASSWORD:?DB_PASSWORD doit être défini (voir .env.example)}
+      - DB_PASSWORD_FILE=/run/secrets/db_password
       - DB_NAME=${DB_NAME:-testdb}
       - DB_HOST=db
       - DB_PORT=5432
+    secrets:
+      - db_password
+    # gunicorn écrit ses fichiers de heartbeat dans /dev/shm ; /tmp reste
+    # disponible pour les bibliothèques qui en ont besoin.
+    tmpfs:
+      - /tmp:size=16m
+    mem_limit: 256m
+    pids_limit: 64
     networks:
       - frontend
       - backend
@@ -28,14 +46,28 @@ services:
         condition: service_healthy
 
   db:
+    <<: *hardening
     # cgr.dev/chainguard/postgres:latest (PostgreSQL 18), relevé le 2026-10-08
     image: cgr.dev/chainguard/postgres@sha256:0c4eaf6cb9bd65337d834f5ebfe79add4312ee2125ab584bf1fbc071abc6bb8f
+    # L'image démarre en root pour faire un chown, ce que cap_drop ALL interdit :
+    # on lance directement l'utilisateur postgres (UID/GID 70).
+    user: "70:70"
     environment:
       POSTGRES_USER: ${DB_USER:-testuser}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD doit être défini (voir .env.example)}
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
       POSTGRES_DB: ${DB_NAME:-testdb}
+    secrets:
+      - db_password
+    # Volume sur le parent de PGDATA (/var/lib/postgresql/data) : le répertoire
+    # appartient à l'UID 70 dans l'image, initdb peut créer PGDATA sans chown.
     volumes:
-      - db-data-test:/var/lib/postgresql/data
+      - db-data:/var/lib/postgresql
+    tmpfs:
+      - /var/run/postgresql:uid=70,gid=70,mode=0700
+      - /tmp:size=64m
+    shm_size: 128m
+    mem_limit: 512m
+    pids_limit: 128
     networks:
       - backend
     # Healthcheck exec ; -h 127.0.0.1 car le socket Unix n'est pas au chemin
@@ -47,6 +79,15 @@ services:
       retries: 5
       start_period: 30s
 
+# Mot de passe monté en fichier (/run/secrets/db_password) : absent de `docker inspect`
+# et de l'environnement de l'API. L'entrypoint PostgreSQL le réexporte toutefois en
+# POSTGRES_PASSWORD dans son propre processus (UID 70). Source `file:` obligatoire,
+# Compose refuse de copier un secret `environment:` dans un conteneur read_only.
+# Fichier non versionné (secrets/), généré en CI, lisible par les UID 65532 et 70.
+secrets:
+  db_password:
+    file: ./secrets/db_password
+
 networks:
   frontend:
   # Réseau sans accès sortant : la base n'est joignable que par l'API.
@@ -54,4 +95,4 @@ networks:
     internal: true
 
 volumes:
-  db-data-test:
+  db-data:
