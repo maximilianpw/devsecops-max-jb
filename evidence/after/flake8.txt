@@ -1,0 +1,5 @@
+# date: 2026-10-08T11:43:12Z
+# cmd: flake8 --config=.flake8 app.py
+# exit: 0
+# cmd: flake8 --isolated --max-line-length=88 app.py (sans la liste ignore)
+# exit: 0

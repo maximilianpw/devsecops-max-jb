@@ -1,0 +1,5 @@
+# date: 2026-10-08T11:32:33Z
+# Dockerfile initial, configuration par défaut (pas encore de .hadolint.yaml)
+# cmd: hadolint Dockerfile
+# exit: 0
+

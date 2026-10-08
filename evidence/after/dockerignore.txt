@@ -1,0 +1,11 @@
+# date: 2026-10-08T12:04:33Z
+# contrôle du .dockerignore : copie du dépôt (avec .git) dans laquelle des fichiers parasites ont été ajoutés, puis build d'un Dockerfile de test qui liste le contexte reçu
+## contenu du dossier
+.coverage .dockerignore .env .env.local .flake8 .git .hadolint.yaml .pytest_cache .venv __pycache__ app.py backup.tar.gz debug.log docker-compose.yml Dockerfile dump.zip evidence htmlcov LICENSE logs notes.md README.md requirements.txt secrets.json server.key test_app.py tests 
+## Dockerfile de test
+    FROM cgr.dev/chainguard/python@sha256:894aed3297d91283e1fc4c542f5374a4b5f3726134fda7c94eaa539342be1e05
+    COPY . /ctx
+    RUN find /ctx -mindepth 1 | sort
+## fichiers reçus par le build
+/ctx/app.py
+/ctx/requirements.txt

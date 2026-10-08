@@ -1,0 +1,10 @@
+# date: 2026-10-08T11:32:32Z
+# même fichier SANS la configuration : violations masquées par la liste ignore de .flake8
+# cmd: flake8 --isolated --max-line-length=88 app.py
+# exit: 1
+app.py:13:1: E302 expected 2 blank lines, found 1
+app.py:17:1: E302 expected 2 blank lines, found 1
+app.py:21:1: E302 expected 2 blank lines, found 1
+app.py:31:1: E302 expected 2 blank lines, found 1
+app.py:46:1: W293 blank line contains whitespace
+app.py:50:1: W391 blank line at end of file

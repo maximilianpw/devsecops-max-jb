@@ -1,0 +1,5 @@
+# date: 2026-10-08T11:32:31Z
+# fichiers initiaux (commit fde7f07), configuration .flake8 fournie
+# cmd: flake8 --config=.flake8 app.py
+# exit: 0
+

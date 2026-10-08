@@ -1,0 +1,69 @@
+# date: 2026-10-08T11:58:33Z
+# cmd: hadolint --config .hadolint.yaml Dockerfile
+exit: 0
+
+# contrôle de la politique : Dockerfiles volontairement fautifs (non versionnés)
+## root
+    FROM cgr.dev/chainguard/python@sha256:b6248c85ba9b97e1e61b30197f309cc4d21661f889fefa5268f0a7bc530dad46
+    USER root
+root:2 DL3002 error: Last USER should not be root
+exit: 1
+## untagged
+    FROM python
+    USER 65532
+untagged:1 DL3006 error: Always tag the version of an image explicitly
+exit: 1
+## latest
+    FROM python:latest
+    USER 65532
+latest:1 DL3007 error: Using latest is prone to errors if the image will ever update. Pin the version explicitly to a release tag
+exit: 1
+## registry
+    FROM quay.io/fedora/python-311@sha256:b6248c85ba9b97e1e61b30197f309cc4d21661f889fefa5268f0a7bc530dad46
+    USER 65532
+registry:1 DL3026 error: Use only an allowed registry in the FROM image
+exit: 1
+## pipefail
+    FROM cgr.dev/chainguard/python@sha256:b6248c85ba9b97e1e61b30197f309cc4d21661f889fefa5268f0a7bc530dad46
+    RUN curl -s https://example.com | python
+    USER 65532
+pipefail:2 DL4006 error: Set the SHELL option -o pipefail before RUN with a pipe in it. If you are using /bin/sh in an alpine image or if your shell is symlinked to busybox then consider explicitly setting your SHELL to /bin/ash, or disable this check
+exit: 1
+## pipcache
+    FROM cgr.dev/chainguard/python@sha256:b6248c85ba9b97e1e61b30197f309cc4d21661f889fefa5268f0a7bc530dad46
+    RUN pip install -r requirements.txt
+    USER 65532
+pipcache:2 DL3042 warning: Avoid use of cache directory with pip. Use `pip install --no-cache-dir <package>`
+exit: 1
+## add-cmd
+    FROM cgr.dev/chainguard/python@sha256:b6248c85ba9b97e1e61b30197f309cc4d21661f889fefa5268f0a7bc530dad46
+    ADD app.py /app/
+    USER 65532
+    CMD python app.py
+add-cmd:2 DL3020 error: Use COPY instead of ADD for files and folders
+add-cmd:4 DL3025 warning: Use arguments JSON notation for CMD and ENTRYPOINT arguments
+exit: 1
+## shell
+    FROM cgr.dev/chainguard/python@sha256:b6248c85ba9b97e1e61b30197f309cc4d21661f889fefa5268f0a7bc530dad46
+    RUN cd /tmp && echo $HOME
+    COPY --from=nope /a /a
+    USER 65532
+shell:2 DL3003 warning: Use WORKDIR to switch to a directory
+shell:2 SC2086 warning: Double quote to prevent globbing and word splitting.
+shell:3 DL3022 warning: `COPY --from` should reference a previously defined `FROM` alias
+exit: 1
+
+# limites : cas que Hadolint laisse passer
+## tag-mouvant
+    FROM python:3.10-slim
+    USER 65532
+exit: 0
+## initial
+    FROM python:3.10-slim
+    WORKDIR /app
+    COPY requirements.txt .
+    RUN pip install --no-cache-dir -r requirements.txt
+    COPY . .
+    EXPOSE 5000
+    CMD ["python", "app.py"]
+exit: 0

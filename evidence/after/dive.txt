@@ -1,0 +1,31 @@
+# date: 2026-10-08T11:49:13Z
+# cmd: dive --ci --lowestEfficiency=0.8 --highestWastedBytes=disabled --highestUserWastedPercent=disabled flask-api:local
+# exit: 0
+  Using default CI config
+Image Source: docker://flask-api:local
+Extracting image from docker-engine... (this can take a while for large images)
+Analyzing image...
+  efficiency: 99.7266 %
+  wastedBytes: 237208 bytes (237 kB)
+  userWastedPercent: 0.4754 %
+Inefficient Files:
+Count  Wasted Space  File Path
+   11        237 kB  /usr/lib/apk/db/installed
+    2           0 B  /run/lock
+    2           0 B  /var/lib/news
+    2           0 B  /usr/share/tabset
+    2           0 B  /usr/man
+   10           0 B  /usr/lib/audit
+    2           0 B  /var/spool/lpd
+    2           0 B  /usr/local/lib
+    2           0 B  /etc/profile.d
+    2           0 B  /etc/ld.so.conf.d
+    3           0 B  /usr/lib/python3.14/zoneinfo/__pycache__
+    2           0 B  /etc/apk/keys
+    2           0 B  /var/mail
+    2           0 B  /home/nonroot
+Results:
+  SKIP: highestUserWastedPercent: rule disabled
+  SKIP: highestWastedBytes: rule disabled
+  PASS: lowestEfficiency
+Result:PASS [Total:3] [Passed:1] [Failed:0] [Warn:0] [Skipped:2]

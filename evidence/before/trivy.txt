@@ -1,0 +1,55 @@
+# date: 2026-10-08T11:33:27Z
+# cmd: trivy image --platform linux/amd64 flask-api:before (toutes sévérités ; extrait du rapport JSON)
+# Version: 0.74.0
+# Vulnerability DB:
+#   Version: 2
+#   UpdatedAt: 2026-10-07 07:38:55.515026687 +0000 UTC
+#   NextUpdate: 2026-10-08 07:38:55.515026457 +0000 UTC
+#   DownloadedAt: 2026-10-08 11:33:38.632234 +0000 UTC
+
+
+Résumé par cible
+cible                                    total CRITICAL     HIGH   MEDIUM      LOW  UNKNOWN corrigibles
+flask-api:before (debian 13.7)             165        0       44       58       61        2           0
+Python                                      20        0        3       15        2        0          20
+
+Vulnérabilités Python (toutes corrigibles)
+Flask           2.3.2    CVE-2026-27205   LOW     corrigé en 3.1.3
+jaraco.context  5.3.0    CVE-2026-23949   HIGH    corrigé en 6.1.0
+pip             23.0.1   CVE-2023-5752    MEDIUM  corrigé en 23.3
+pip             23.0.1   CVE-2025-8869    MEDIUM  corrigé en 25.3
+pip             23.0.1   CVE-2026-13346   MEDIUM  corrigé en 26.2.0
+pip             23.0.1   CVE-2026-3219    MEDIUM  corrigé en 26.1
+pip             23.0.1   CVE-2026-6357    MEDIUM  corrigé en 26.1
+pip             23.0.1   CVE-2026-8643    MEDIUM  corrigé en 26.1.2
+pip             23.0.1   CVE-2026-1703    LOW     corrigé en 26.0
+pytest          7.4.0    CVE-2025-71176   MEDIUM  corrigé en 9.0.3
+setuptools      79.0.1   CVE-2026-59890   MEDIUM  corrigé en 83.0.0
+Werkzeug        2.3.3    CVE-2024-34069   HIGH    corrigé en 3.0.3
+Werkzeug        2.3.3    CVE-2023-46136   MEDIUM  corrigé en 3.0.1, 2.3.8
+Werkzeug        2.3.3    CVE-2024-49766   MEDIUM  corrigé en 3.0.6
+Werkzeug        2.3.3    CVE-2024-49767   MEDIUM  corrigé en 3.0.6
+Werkzeug        2.3.3    CVE-2025-66221   MEDIUM  corrigé en 3.1.4
+Werkzeug        2.3.3    CVE-2026-102598  MEDIUM  corrigé en 3.1.9
+Werkzeug        2.3.3    CVE-2026-21860   MEDIUM  corrigé en 3.1.5
+Werkzeug        2.3.3    CVE-2026-27199   MEDIUM  corrigé en 3.1.6
+wheel           0.45.1   CVE-2026-24049   HIGH    corrigé en 0.46.2
+
+Vulnérabilités Debian HIGH (aucune corrigible au moment du scan)
+bsdutils               CVE-2026-76642 CVE-2026-78408 CVE-2026-78409 CVE-2026-78410
+libacl1                CVE-2026-54369
+libblkid1              CVE-2026-76642 CVE-2026-78408 CVE-2026-78409 CVE-2026-78410
+liblastlog2-2          CVE-2026-76642 CVE-2026-78408 CVE-2026-78409 CVE-2026-78410
+libmount1              CVE-2026-76642 CVE-2026-78408 CVE-2026-78409 CVE-2026-78410
+libncursesw6           CVE-2025-69720
+libsmartcols1          CVE-2026-76642 CVE-2026-78408 CVE-2026-78409 CVE-2026-78410
+libsystemd0            CVE-2026-16742
+libtinfo6              CVE-2025-69720
+libudev1               CVE-2026-16742
+libuuid1               CVE-2026-76642 CVE-2026-78408 CVE-2026-78409 CVE-2026-78410
+login                  CVE-2026-76642 CVE-2026-78408 CVE-2026-78409 CVE-2026-78410
+mount                  CVE-2026-76642 CVE-2026-78408 CVE-2026-78409 CVE-2026-78410
+ncurses-base           CVE-2025-69720
+ncurses-bin            CVE-2025-69720
+perl-base              CVE-2026-9538
+util-linux             CVE-2026-76642 CVE-2026-78408 CVE-2026-78409 CVE-2026-78410

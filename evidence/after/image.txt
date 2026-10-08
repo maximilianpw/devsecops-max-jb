@@ -1,0 +1,77 @@
+# date: 2026-10-08T11:49:08Z
+# image: flask-api:local
+## configuration
+id=sha256:80e8548b7d658a19b752fd8538b2506fc7c7b745799f28e988e7626e5fb166df os/arch=linux/amd64
+Config.User=65532:65532
+Entrypoint=["/app/venv/bin/python","-m","gunicorn"] Cmd=["--bind","0.0.0.0:5000","--workers","2","--worker-tmp-dir","/dev/shm","--no-control-socket","--access-logfile","-","app:app"]
+size_bytes=86619849
+size_MB=86.6 (10^6 octets)
+## utilisateur effectif
+uid 65532 gid 65532 nom nonroot
+## shell : docker run --entrypoint /bin/sh flask-api:local -c 'echo shell'
+docker: Error response from daemon: failed to create task for container: failed to create shim task: OCI runtime create failed: runc create failed: unable to start container process: error during container init: exec: "/bin/sh": stat /bin/sh: no such file or directory
+
+exit: 127
+## binaires et modules (recherche dans PATH et /bin, /sbin, /usr/bin, /usr/sbin)
+sh: absent
+bash: absent
+ash: absent
+dash: absent
+busybox: absent
+apk: absent
+apt: absent
+apt-get: absent
+dpkg: absent
+pip: absent
+pip3: absent
+gcc: absent
+cc: absent
+make: absent
+curl: absent
+wget: absent
+module pip: absent
+module ensurepip: présent
+module setuptools: absent
+module pytest: absent
+## contenu et permissions de /app
+/app 0o40755 uid=0 gid=0 
+/app/app.py 0o100644 uid=0 gid=0 
+/app/venv 0o40755 uid=0 gid=0 
+/app/venv/bin/python 0o120777 uid=0 gid=0 -> /usr/bin/python
+/app : ['app.py', 'venv']
+/app/venv/bin : ['Activate.ps1', 'activate', 'activate.csh', 'activate.fish', 'flask', 'gunicorn', 'gunicornc', 'python', 'python3', 'python3.14', '𝜋thon']
+écriture /app : False
+écriture /app/app.py : False
+écriture /app/venv : False
+écriture /app/venv/lib/python3.14/site-packages : False
+entrées de /app modifiables par l utilisateur : 0 []
+## paquets Python installés
+Flask==3.1.3
+Jinja2==3.1.6
+MarkupSafe==3.0.4
+Werkzeug==3.1.9
+blinker==1.9.0
+click==8.5.0
+gunicorn==26.2.0
+itsdangerous==2.2.0
+psycopg2-binary==2.9.13
+## couches
+0B	CMD ["--bind" "0.0.0.0:5000" "--workers" "2"…
+0B	ENTRYPOINT ["/app/venv/bin/python" "-m" "gun…
+0B	EXPOSE [5000/tcp]
+0B	USER 65532:65532
+0B	WORKDIR /app
+1.44kB	COPY app.py /app/app.py # buildkit
+19MB	COPY --chown=0:0 /app/venv /app/venv # build…
+0B	ENV PATH=/app/venv/bin:/usr/local/sbin:/usr/…
+129kB	apko
+4.2MB	apko
+1.09MB	apko
+1.47MB	apko
+1.81MB	apko
+1.84MB	apko
+2.08MB	apko
+3.76MB	apko
+7.2MB	apko
+7.29MB	apko
+36.7MB	apko

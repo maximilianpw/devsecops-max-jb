@@ -1,0 +1,56 @@
+# date: 2026-10-08T11:33:03Z
+# image: flask-api:before, construite depuis le commit fde7f07 (git archive), --platform linux/amd64
+## image id / plateforme
+id=sha256:78e912b689c6388c4e1ad3fbbd0b322b0bdcda3d3a475bf61ceda41b906c03b4 os/arch=linux/amd64
+## taille
+size_bytes=148204470
+size_MB=148.2 (10^6 octets)
+## image de base
+python:3.10-slim index digest="sha256:6ff506466f8b1e981719b468cc0023b8ef000b983cdec0eafe119d01f379e31d"## utilisateur configuré (Config.User, vide = root)
+Config.User=""
+## utilisateur effectif : docker run --rm --entrypoint id flask-api:before
+uid=0(root) gid=0(root) groups=0(root)
+## shell présent : docker run --rm --entrypoint /bin/sh flask-api:before -c 'echo shell-ok; ls -l /bin/sh /bin/bash'
+shell-ok
+-rwxr-xr-x 1 root root 1298416 Jul 12 16:58 /bin/bash
+lrwxrwxrwx 1 root root       4 Feb  4  2025 /bin/sh -> dash
+## outils de build / gestionnaires de paquets présents
+apt: /usr/bin/apt
+apt-get: /usr/bin/apt-get
+dpkg: /usr/bin/dpkg
+pip: /usr/local/bin/pip
+gcc: absent
+cc: absent
+make: absent
+## commande de démarrage
+Entrypoint=null Cmd=["python","app.py"]
+## Python
+Python 3.10.22
+## fichiers copiés dans /app (COPY . .)
+total 28
+drwxr-xr-x 1 root root  150 Oct  8 11:32 .
+drwxr-xr-x 1 root root   12 Oct  8 11:33 ..
+-rw-r--r-- 1 root root  106 Oct  8 11:20 .flake8
+-rw-r--r-- 1 root root  155 Oct  8 11:20 Dockerfile
+-rw-r--r-- 1 root root 1062 Oct  8 11:20 LICENSE
+-rw-r--r-- 1 root root 1195 Oct  8 11:20 app.py
+-rw-r--r-- 1 root root  699 Oct  8 11:20 docker-compose.yml
+-rw-r--r-- 1 root root   58 Oct  8 11:20 requirements.txt
+-rw-r--r-- 1 root root  575 Oct  8 11:20 test_app.py
+## couches
+0B	CMD ["python" "app.py"]
+0B	EXPOSE [5000/tcp]
+3.85kB	COPY . . # buildkit
+25.7MB	RUN /bin/sh -c pip install --no-cache-dir -r requirements.txt # buildkit
+58B	COPY requirements.txt . # buildkit
+0B	WORKDIR /app
+0B	CMD ["python3"]
+36B	RUN /bin/sh -c set -eux;  for src in idle3 pip3 pydoc3 python3 python3-config; do   dst="$(echo "$src" | tr -d 3)";   [ -s "/usr/local/bin/$src" ];   [ ! -e
+39.9MB	RUN /bin/sh -c set -eux;   savedAptMark="$(apt-mark showmanual)";  apt-get update;  apt-get install -y --no-install-recommends   dpkg-dev   g++   gcc   g
+0B	ENV PYTHON_SHA256=c61fe9b1a1a7ec2a0b0388e664187c378a5325a89e3606d220abf5bdfccb2543
+0B	ENV PYTHON_VERSION=3.10.22
+0B	ENV GPG_KEY=A035C8C19219BA821ECEA86B64E628F8D684696D
+3.81MB	RUN /bin/sh -c set -eux;  apt-get update;  apt-get install -y --no-install-recommends   ca-certificates   netbase   tzdata  ;  apt-get dist-clean # build
+0B	ENV LANG=C.UTF-8
+0B	ENV PATH=/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+78.8MB	# debian.sh --arch 'amd64' out/ 'trixie' '@1791158400'

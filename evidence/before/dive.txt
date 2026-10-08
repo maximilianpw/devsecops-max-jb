@@ -1,0 +1,38 @@
+# date: 2026-10-08T11:33:20Z
+# cmd: dive --ci --lowestEfficiency=0.8 --highestWastedBytes=disabled --highestUserWastedPercent=disabled flask-api:before
+# exit: 0
+  Using default CI config
+Image Source: docker://flask-api:before
+Extracting image from docker-engine... (this can take a while for large images)
+Analyzing image...
+  efficiency: 97.3544 %
+  wastedBytes: 5650425 bytes (5.7 MB)
+  userWastedPercent: 8.1459 %
+Inefficient Files:
+Count  Wasted Space  File Path
+    3        2.4 MB  /var/cache/debconf/templates.dat-old
+    3        2.4 MB  /var/cache/debconf/templates.dat
+    3        220 kB  /var/lib/dpkg/status
+    3        220 kB  /var/lib/dpkg/status-old
+    2        130 kB  /var/log/dpkg.log
+    2         83 kB  /var/lib/dpkg/info/perl-base.list
+    2         49 kB  /var/log/apt/term.log
+    3         38 kB  /var/cache/debconf/config.dat
+    3         38 kB  /var/cache/debconf/config.dat-old
+    3         19 kB  /var/log/apt/eipp.log.xz
+    3         13 kB  /var/lib/apt/extended_states
+    2         11 kB  /var/log/apt/history.log
+    2        8.8 kB  /etc/ld.so.cache
+    2         836 B  /var/lib/dpkg/diversions
+    2         648 B  /var/lib/dpkg/diversions-old
+    2         288 B  /var/lib/dpkg/triggers/File
+    2         116 B  /app/requirements.txt
+    3           0 B  /var/lib/dpkg/triggers/Lock
+    2           0 B  /var/lib/dpkg/triggers/Unincorp
+    2           0 B  /tmp
+    3           0 B  /var/lib/dpkg/lock
+Results:
+  SKIP: highestUserWastedPercent: rule disabled
+  SKIP: highestWastedBytes: rule disabled
+  PASS: lowestEfficiency
+Result:PASS [Total:3] [Passed:1] [Failed:0] [Warn:0] [Skipped:2]
