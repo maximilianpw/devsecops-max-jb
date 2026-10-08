@@ -10,7 +10,19 @@ DB_HOST = os.getenv("DB_HOST", "db")
 DB_PORT = os.getenv("DB_PORT", "5432")
 DB_NAME = os.getenv("DB_NAME", "testdb")
 DB_USER = os.getenv("DB_USER", "testuser")
-DB_PASSWORD = os.getenv("DB_PASSWORD")
+
+
+def read_db_password():
+    """Prefer a mounted secret file (DB_PASSWORD_FILE) over DB_PASSWORD."""
+    secret_file = os.getenv("DB_PASSWORD_FILE")
+    if secret_file:
+        # A missing or unreadable file fails at startup, not as an opaque 500.
+        with open(secret_file, encoding="utf-8") as fh:
+            return fh.read().rstrip("\r\n")
+    return os.getenv("DB_PASSWORD")
+
+
+DB_PASSWORD = read_db_password()
 DB_CONNECT_TIMEOUT = 5
 
 
