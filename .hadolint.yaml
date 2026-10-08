@@ -1,0 +1,14 @@
+failure-threshold: warning
+
+trustedRegistries:
+  - docker.io
+  - gcr.io
+  - cgr.dev
+  - ghcr.io
+
+override:
+  error:
+    - DL3002
+    - DL3006
+    - DL3007
+    - DL4006
