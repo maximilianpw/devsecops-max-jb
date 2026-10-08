@@ -327,14 +327,18 @@ Hadolint + pinning ───────┘                   └─ Compose + p
   - Le job suivant fait un `docker pull` anonyme par tag et par digest, puis
     un smoke test sur `/health`.
 
-Paramètres GitHub à configurer par un administrateur du dépôt (non vérifiés
-par la CI) :
+Paramètres GitHub configurés par le propriétaire du dépôt (vérifiés par
+l'API GitHub le 2026-10-08, non contrôlés par la CI) :
 
-- règle de protection des tags `v*` (création réservée aux mainteneurs, ni
-  suppression ni mise à jour) ;
-- protection de `main` avec les jobs du workflow comme checks requis ;
-- visibilité **publique** du package GHCR : vérifiée, le pull anonyme
-  fonctionne.
+- **`main` protégée** : les 5 jobs de validation (`Flake8 + tests unitaires`,
+  `Hadolint + pinning`, `BuildKit + Dive`, `Trivy`, `Compose + pytest`) sont
+  des checks obligatoires avant fusion.
+- **Tags `v*`** : ruleset `release-tags` actif, sans exception, qui interdit
+  la mise à jour et la suppression d'un tag de release. La création reste
+  ouverte aux comptes ayant l'accès en écriture ; le job de release refuse
+  de toute façon un tag hors de l'historique de `main` ou plus ancien que la
+  dernière release.
+- **Package GHCR public** : vérifié, le pull anonyme fonctionne.
 
 ## 7. Preuves
 
