@@ -1,18 +1,22 @@
 services:
   api-python:
+    # Image construite et auditée par la CI (API_IMAGE) ; `build` reste
+    # disponible en local : `docker compose up --build` produit flask-api:local.
+    image: ${API_IMAGE:-flask-api:local}
     build: .
     ports:
-      - "5000:5000"
+      - "127.0.0.1:5000:5000"
     environment:
       - ENV=test
-      - DB_USER=testuser
-      - DB_PASSWORD=testpass
-      - DB_NAME=testdb
+      - DB_USER=${DB_USER:-testuser}
+      - DB_PASSWORD=${DB_PASSWORD:?DB_PASSWORD doit être défini (voir .env.example)}
+      - DB_NAME=${DB_NAME:-testdb}
       - DB_HOST=db
       - DB_PORT=5432
     networks:
       - frontend
       - backend
+    # Pas de shell dans l'image : healthcheck exec via le Python du venv.
     healthcheck:
       test: ["CMD", "/app/venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=3)"]
       interval: 10s
@@ -24,17 +28,20 @@ services:
         condition: service_healthy
 
   db:
+    # cgr.dev/chainguard/postgres:latest (PostgreSQL 18), relevé le 2026-10-08
     image: cgr.dev/chainguard/postgres@sha256:0c4eaf6cb9bd65337d834f5ebfe79add4312ee2125ab584bf1fbc071abc6bb8f
     environment:
-      POSTGRES_USER: testuser
-      POSTGRES_PASSWORD: testpass
-      POSTGRES_DB: testdb
+      POSTGRES_USER: ${DB_USER:-testuser}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD doit être défini (voir .env.example)}
+      POSTGRES_DB: ${DB_NAME:-testdb}
     volumes:
       - db-data-test:/var/lib/postgresql/data
     networks:
       - backend
+    # Healthcheck exec ; -h 127.0.0.1 car le socket Unix n'est pas au chemin
+    # attendu par défaut par pg_isready.
     healthcheck:
-      test: ["CMD", "/usr/bin/pg_isready", "-h", "127.0.0.1", "-U", "testuser", "-d", "testdb"]
+      test: ["CMD", "/usr/bin/pg_isready", "-h", "127.0.0.1", "-U", "${DB_USER:-testuser}", "-d", "${DB_NAME:-testdb}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -42,6 +49,7 @@ services:
 
 networks:
   frontend:
+  # Réseau sans accès sortant : la base n'est joignable que par l'API.
   backend:
     internal: true
 

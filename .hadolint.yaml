@@ -1,10 +1,9 @@
-failure-threshold: warning
+# Seuil par défaut d'Hadolint (info) : toute alerte fait échouer le lint.
+failure-threshold: info
 
+# Seul registre utilisé par le Dockerfile.
 trustedRegistries:
-  - docker.io
-  - gcr.io
   - cgr.dev
-  - ghcr.io
 
 override:
   error:
@@ -12,3 +11,5 @@ override:
     - DL3006
     - DL3007
     - DL4006
+  warning:
+    - SC2086
