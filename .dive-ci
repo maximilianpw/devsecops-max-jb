@@ -1,0 +1,12 @@
+# Règles Dive (v0.13.x) appliquées en CI : `dive --ci --ci-config .dive-ci <image>`.
+# Tous les seuils sont explicites pour ne pas dépendre des valeurs par défaut
+# de Dive (lowestEfficiency vaut 0.9 par défaut).
+rules:
+  # Exigence du TP : efficacité de l'image >= 80 %.
+  lowestEfficiency: 0.8
+  # Pas de plafond absolu en octets : le ratio ci-dessous suffit à détecter
+  # les doublons, quelle que soit la taille de l'image de base.
+  highestWastedBytes: disabled
+  # Valeur par défaut de Dive rendue explicite : au plus 10 % des octets
+  # ajoutés par nos couches peuvent être gaspillés (fichiers écrasés/supprimés).
+  highestUserWastedPercent: 0.1

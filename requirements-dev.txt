@@ -1,0 +1,4 @@
+# Outils de qualité et de test (non embarqués dans l'image runtime).
+# Les dépendances applicatives restent dans requirements.txt.
+flake8==7.4.1
+pytest==9.1.1
