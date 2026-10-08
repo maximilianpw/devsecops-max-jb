@@ -14,8 +14,9 @@ L'API est servie par gunicorn sur le port 5000 et lit `DB_HOST`, `DB_PORT`,
 `DB_NAME`, `DB_USER` et `DB_PASSWORD_FILE` (fichier secret), ou `DB_PASSWORD`
 à défaut.
 
-> **État du rapport.** Release `v1.0.0` publiée par la CI le 2026-10-08
-> ([run 37777799398](https://github.com/maximilianpw/devsecops-max-jb/actions/runs/37777799398)). Les sorties brutes des mesures locales
+> **État du rapport.** Release `v1.1.0` publiée par la CI le 2026-10-08
+> ([run 37784147903](https://github.com/maximilianpw/devsecops-max-jb/actions/runs/37784147903)),
+> après `v1.0.0` ([run 37777799398](https://github.com/maximilianpw/devsecops-max-jb/actions/runs/37777799398)). Les sorties brutes des mesures locales
 > sont dans [`evidence/`](evidence/). Chaque mesure indique sa date, sa
 > commande et la version de l'outil.
 
@@ -23,20 +24,24 @@ L'API est servie par gunicorn sur le port 5000 et lit `DB_HOST`, `DB_PORT`,
 
 | Image | Lien | Statut |
 | --- | --- | --- |
-| API Flask | [`ghcr.io/maximilianpw/devsecops-max-jb`](https://github.com/users/maximilianpw/packages/container/package/devsecops-max-jb) | public, `v1.0.0` publiée le 2026-10-08 |
+| API Flask | [`ghcr.io/maximilianpw/devsecops-max-jb`](https://github.com/users/maximilianpw/packages/container/package/devsecops-max-jb) | public, dernière release `v1.1.0` publiée le 2026-10-08 |
 
 Commandes de récupération, sans authentification :
 
 ```bash
-docker pull ghcr.io/maximilianpw/devsecops-max-jb:1.0.0   # version exacte
-docker pull ghcr.io/maximilianpw/devsecops-max-jb:1.0     # alias mineur
+docker pull ghcr.io/maximilianpw/devsecops-max-jb:1.1.0   # version exacte
+docker pull ghcr.io/maximilianpw/devsecops-max-jb:1.1     # alias mineur
 docker pull ghcr.io/maximilianpw/devsecops-max-jb:1       # alias majeur
-docker pull ghcr.io/maximilianpw/devsecops-max-jb@sha256:3a145abadcb61a994b8c289b7a615f300e036faa42c2c279c39cdfaa0c28034f
+docker pull ghcr.io/maximilianpw/devsecops-max-jb@sha256:451dccc2796cfb0d5c0e65ab683368977afac30604cc354067dfb6ca36943463
 ```
 
-Digest publié pour `1.0.0`, `1.0` et `1` : `sha256:3a145abadcb61a994b8c289b7a615f300e036faa42c2c279c39cdfaa0c28034f`.
-Image auditée correspondante (Image ID) :
-`sha256:ce1ca47843510b426d41d0bffa2fe8de371a11908cd4635e829e0b443ee9f402`.
+| Version | Tags | Digest publié | Image auditée (Image ID) | Contenu |
+| --- | --- | --- | --- | --- |
+| `v1.1.0` | `1.1.0`, `1.1`, `1` | `sha256:451dccc2796cfb0d5c0e65ab683368977afac30604cc354067dfb6ca36943463` | `sha256:e4564d69d8fbbed2af48181cfa371d3ee8ea0ffc152099640a120f86fd165474` | mot de passe lu depuis `DB_PASSWORD_FILE` ; Compose durci, secret fichier ; gate Trivy sur l'image PostgreSQL |
+| `v1.0.0` | `1.0.0`, `1.0` | `sha256:3a145abadcb61a994b8c289b7a615f300e036faa42c2c279c39cdfaa0c28034f` | `sha256:ce1ca47843510b426d41d0bffa2fe8de371a11908cd4635e829e0b443ee9f402` | stack durcie et pipeline DevSecOps |
+
+`1.0.0` n'a pas été réécrit par la release `v1.1.0` (même digest qu'à sa
+publication, vérifié le 2026-10-08) ; l'alias `1` suit désormais `1.1.0`.
 
 Tags publiés pour une release `vX.Y.Z` : `X.Y.Z`, `X.Y` et `X`. Seul le digest
 est immuable. `X.Y.Z` n'est jamais réécrit. Les alias `X.Y` et `X` suivent la
@@ -381,6 +386,26 @@ l'API GitHub le 2026-10-08, non contrôlés par la CI) :
 - **Package GHCR public** : vérifié, le pull anonyme fonctionne.
 
 ## 7. Preuves
+
+### Run de release `v1.1.0`
+
+[Run 37784147903](https://github.com/maximilianpw/devsecops-max-jb/actions/runs/37784147903), déclenché par le tag `v1.1.0` sur le
+commit `fc3b947` (merge de la PR #4), runners `ubuntu-24.04`, le 2026-10-08.
+Les 7 jobs sont en succès. Extraits des logs :
+
+| Job | Extrait |
+| --- | --- |
+| Flake8 + tests unitaires | `6 passed, 3 deselected` |
+| Hadolint + pinning | `hadolint: OK`, `Pinning OK : Dockerfile, Compose et actions sont immuables ; Compose durci.` |
+| BuildKit + Dive | `efficiency: 99.7266 %`, `userWastedPercent: 0.4754 %`, `Result:PASS [Total:3] [Passed:2] [Failed:0] [Warn:0] [Skipped:1]` |
+| Trivy | gate HIGH/CRITICAL corrigibles : `0` pour `wolfi` et chacun des 9 paquets Python, `0` pour `requirements.txt`, `0` pour `cgr.dev/chainguard/postgres@sha256:0c4eaf6c…` (61 paquets) ; rapports complets dans l'artefact `trivy-reports-1` |
+| Compose + pytest | `Image vérifiée : flask-api:ci-fc3b947f406c (sha256:e4564d69…)`, `api-python: healthy`, `db: healthy` (secret fichier en 0644 sur runner Linux), `3 passed` |
+| Release GHCR | `1.1.0`, `1.1` et `1` : `sha256:451dccc2796cfb0d5c0e65ab683368977afac30604cc354067dfb6ca36943463` |
+| Pull public + smoke test | pull anonyme par tag et par digest (`Digest: sha256:451dccc2…`), puis `{"status":"ok"}` |
+
+Vérification depuis un poste local, sans authentification
+(`docker buildx imagetools inspect`) : `1.1.0`, `1.1` et `1` pointent sur
+`sha256:451dccc2…` ; `1.0.0` pointe toujours sur `sha256:3a145aba…`.
 
 ### Run de release `v1.0.0`
 
