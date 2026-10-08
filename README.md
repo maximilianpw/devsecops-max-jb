@@ -13,23 +13,29 @@ publiée sur GHCR par GitHub Actions
 L'API est servie par gunicorn sur le port 5000 et lit `DB_HOST`, `DB_PORT`,
 `DB_NAME`, `DB_USER` et `DB_PASSWORD`.
 
-> **État du rapport.** Les sections marquées _« À compléter »_ attendent le
-> premier run CI vert ou la première release. Les sorties brutes des outils
-> sont dans [`evidence/`](evidence/). Aucune valeur n'est inventée : chaque
-> mesure indique sa date, sa commande et la version de l'outil.
+> **État du rapport.** Release `v1.0.0` publiée par la CI le 2026-10-08
+> ([run 37777799398](https://github.com/maximilianpw/devsecops-max-jb/actions/runs/37777799398)). Les sorties brutes des mesures locales
+> sont dans [`evidence/`](evidence/). Chaque mesure indique sa date, sa
+> commande et la version de l'outil.
 
 ## 1. Packages GHCR publics
 
 | Image | Lien | Statut |
 | --- | --- | --- |
-| API Flask | `ghcr.io/maximilianpw/devsecops-max-jb` | _À compléter : aucune release publiée_ |
+| API Flask | [`ghcr.io/maximilianpw/devsecops-max-jb`](https://github.com/users/maximilianpw/packages/container/package/devsecops-max-jb) | public, `v1.0.0` publiée le 2026-10-08 |
 
-Commandes de récupération (à confirmer après la première release `vX.Y.Z`) :
+Commandes de récupération, sans authentification :
 
 ```bash
-docker pull ghcr.io/maximilianpw/devsecops-max-jb:X.Y.Z     # version exacte
-docker pull ghcr.io/maximilianpw/devsecops-max-jb@sha256:…  # digest immuable
+docker pull ghcr.io/maximilianpw/devsecops-max-jb:1.0.0   # version exacte
+docker pull ghcr.io/maximilianpw/devsecops-max-jb:1.0     # alias mineur
+docker pull ghcr.io/maximilianpw/devsecops-max-jb:1       # alias majeur
+docker pull ghcr.io/maximilianpw/devsecops-max-jb@sha256:3a145abadcb61a994b8c289b7a615f300e036faa42c2c279c39cdfaa0c28034f
 ```
+
+Digest publié pour `1.0.0`, `1.0` et `1` : `sha256:3a145abadcb61a994b8c289b7a615f300e036faa42c2c279c39cdfaa0c28034f`.
+Image auditée correspondante (Image ID) :
+`sha256:ce1ca47843510b426d41d0bffa2fe8de371a11908cd4635e829e0b443ee9f402`.
 
 Tags publiés pour une release `vX.Y.Z` : `X.Y.Z`, `X.Y` et `X`. Seul le digest
 est immuable. `X.Y.Z` n'est jamais réécrit. Les alias `X.Y` et `X` suivent la
@@ -327,12 +333,34 @@ par la CI) :
 - règle de protection des tags `v*` (création réservée aux mainteneurs, ni
   suppression ni mise à jour) ;
 - protection de `main` avec les jobs du workflow comme checks requis ;
-- visibilité **publique** du package GHCR après la première publication.
+- visibilité **publique** du package GHCR : vérifiée, le pull anonyme
+  fonctionne.
 
 ## 7. Preuves
 
-Mesures locales du 2026-10-08 (hôte arm64, images `linux/amd64`), sauf
-mention contraire. Les preuves CI seront ajoutées après le premier run vert.
+### Run de release `v1.0.0`
+
+[Run 37777799398](https://github.com/maximilianpw/devsecops-max-jb/actions/runs/37777799398), déclenché par le tag `v1.0.0` sur le
+commit `305e539`, runners `ubuntu-24.04`, le 2026-10-08. Les 7 jobs sont en
+succès. Extraits des logs :
+
+| Job | Extrait |
+| --- | --- |
+| Flake8 + tests unitaires | `3 passed, 3 deselected` |
+| Hadolint + pinning | `Pinning OK : Dockerfile, Compose et actions sont immuables.` |
+| BuildKit + Dive | `efficiency: 99.7266 %`, `userWastedPercent: 0.4754 %`, `Result:PASS [Total:3] [Passed:2] [Failed:0] [Warn:0] [Skipped:1]` |
+| Trivy | gate HIGH/CRITICAL corrigibles : `0` pour `wolfi` et chacun des 9 paquets Python ; rapports complets (artefact `trivy-reports-1`) : 0 vulnérabilité, toutes sévérités, image et `requirements.txt` |
+| Compose + pytest | `Image vérifiée : flask-api:ci-305e53921a35 (sha256:ce1ca478…)`, `api-python: healthy`, `db: healthy`, `3 passed` |
+| Release GHCR | `1.0.0: digest: sha256:3a145abadcb61a994b8c289b7a615f300e036faa42c2c279c39cdfaa0c28034f` ; `1.0` et `1` : même digest |
+| Pull public + smoke test | pull anonyme par tag et par digest, puis `{"status":"ok"}` |
+
+Le pull anonyme a aussi été vérifié depuis un poste local
+(`docker logout ghcr.io && docker pull ghcr.io/maximilianpw/devsecops-max-jb:1.0.0`),
+avec le même digest.
+
+### Mesures locales
+
+Mesures locales du 2026-10-08 (hôte arm64, images `linux/amd64`).
 
 | Contrôle | Commande | Résultat |
 | --- | --- | --- |
@@ -349,7 +377,7 @@ mention contraire. Les preuves CI seront ajoutées après le premier run vert.
 | Tests d'intégration | `pytest -m integration tests/integration` | 3 passed |
 | Isolation | connexion à `db:5432` depuis le réseau `frontend` | nom `db` non résolu |
 | Smoke test release | image seule, `GET /health` | 200 `{"status":"ok"}` |
-| Publication | jobs `Release GHCR` + `Pull public + smoke test` | _À compléter_ |
+| Publication | jobs `Release GHCR` + `Pull public + smoke test` | voir le run de release ci-dessus |
 
 Preuves détaillées de la stack ([`evidence/`](evidence/)) :
 
@@ -362,7 +390,7 @@ Preuves détaillées de la stack ([`evidence/`](evidence/)) :
 | [`after/image.txt`](evidence/after/image.txt) | taille, utilisateur, shell, binaires, permissions |
 | [`after/dive.txt`](evidence/after/dive.txt) | Dive en mode CI |
 | [`after/trivy.txt`](evidence/after/trivy.txt) | Trivy sur l'image finale |
-| [`after/trivy-requirements.txt`](evidence/after/trivy-requirements.txt) | Trivy sur `requirements.txt` |
+| [`after/trivy-deps.txt`](evidence/after/trivy-deps.txt) | Trivy sur `requirements.txt` (renommé : Dependabot lisait l'ancien nom `*requirements*.txt` comme un manifeste pip) |
 | [`after/build-cache.txt`](evidence/after/build-cache.txt) | cache des dépendances conservé après modification du code |
 | [`after/runtime-compat.txt`](evidence/after/runtime-compat.txt) | même Python, ABI et glibc entre build et image finale |
 | [`after/image-run.txt`](evidence/after/image-run.txt) | démarrage en lecture seule |
