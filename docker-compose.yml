@@ -10,26 +10,40 @@ services:
       - DB_NAME=testdb
       - DB_HOST=db
       - DB_PORT=5432
+    networks:
+      - frontend
+      - backend
+    healthcheck:
+      test: ["CMD", "/app/venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     depends_on:
       db:
         condition: service_healthy
-  
+
   db:
-    image: postgres:14-alpine
+    image: cgr.dev/chainguard/postgres@sha256:0c4eaf6cb9bd65337d834f5ebfe79add4312ee2125ab584bf1fbc071abc6bb8f
     environment:
       POSTGRES_USER: testuser
       POSTGRES_PASSWORD: testpass
       POSTGRES_DB: testdb
-    ports:
-      - "5432:5432"
     volumes:
       - db-data-test:/var/lib/postgresql/data
+    networks:
+      - backend
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U testuser -d testdb"]
+      test: ["CMD", "/usr/bin/pg_isready", "-h", "127.0.0.1", "-U", "testuser", "-d", "testdb"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
+
+networks:
+  frontend:
+  backend:
+    internal: true
 
 volumes:
   db-data-test:
