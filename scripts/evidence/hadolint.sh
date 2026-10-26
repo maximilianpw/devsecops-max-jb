@@ -49,7 +49,7 @@ echo
 echo "# limites de Hadolint et contrôle qui les couvre"
 w=$(mktemp -d)
 lim() {
-  printf "$2" > "$w/$1"
+  printf '%b' "$2" > "$w/$1"
   echo "## $1"; sed 's/^/    /' "$w/$1"
   hadolint --no-color --config .hadolint.yaml "$w/$1" | sed "s#$w/##"; echo "hadolint exit: ${PIPESTATUS[0]}"
 }
@@ -78,9 +78,9 @@ echo "# lecture du Dockerfile par check_pinning.py comparée à BuildKit (FROM s
 echo "# BuildKit échoue sur « absent » quand ADD est une instruction réelle ; check_pinning.py doit refuser exactement ces ADD"
 w=$(mktemp -d)
 cmp() {
-  printf "$2" > "$w/Dockerfile"
+  printf '%b' "$2" > "$w/Dockerfile"
   echo "## $1"; sed 's/^/    /' "$w/Dockerfile" | cat -t
-  docker buildx build --no-cache --progress=plain ${3:-} -o type=cacheonly "$w" > "$w/log" 2>&1
+  docker buildx build --no-cache --progress=plain ${3:+"$3"} -o type=cacheonly "$w" > "$w/log" 2>&1
   grep -E '^#[0-9]+ \[[0-9]' "$w/log" | sed 's/^#[0-9]* /buildkit: /'
   grep -oE 'unterminated heredoc|"/absent[0-9]*": not found' "$w/log" | sort -u | sed 's/^/buildkit: erreur /'
   [ -n "${3:-}" ] && sed -n '/TARGET/,$p' "$w/log" | sed 's/^/buildkit: /'
@@ -101,8 +101,12 @@ cmp mot-cle-coupe 'FROM scratch\nA\\\nDD absent /x\n'
 cmp heredoc-nom-vide "FROM scratch\nCOPY <<'' /x\nADD absent /y\n\n"
 echo "# syntaxes ambiguës : check_pinning.py refuse au lieu d'interpréter"
 cmp double-antislash 'FROM scratch\nLABEL p=C:\\\\\nADD absent /x\n'
+# Backticks littéraux : caractère d'échappement des directives testées.
+# shellcheck disable=SC2016
 cmp directive-escape '# escape=`\nFROM scratch\nLABEL n=v`\nADD absent /x\n'
+# shellcheck disable=SC2016
 cmp directive-indentee '  # escape=`\nFROM scratch\nLABEL n=v`\nADD absent /x\n'
+# shellcheck disable=SC2016
 cmp directive-apres-inconnue '# anything=x\n# escape=`\nFROM scratch\nLABEL n=v`\nADD absent /x\n'
 cmp bom '\xef\xbb\xbfFROM cgr.dev/chainguard/python:latest-dev AS mutable\n' --call=targets
 rm -rf "$w"
