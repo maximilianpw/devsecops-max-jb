@@ -84,7 +84,7 @@ Image PostgreSQL, mêmes conditions de mesure :
 | --- | --- | --- |
 | Image | `postgres:14-alpine` (Alpine 3.24.2, tag mouvant) | `cgr.dev/chainguard/postgres` (Wolfi), épinglée par digest |
 | Version | PostgreSQL 14.24 | PostgreSQL 18.6 |
-| Taille décompressée (Dive) | 284,6 MB | 361,7 MB |
+| Taille décompressée (Dive) | 284,6 MB | 361,7 MB ([`dive-db.txt`](evidence/after/dive-db.txt)) |
 | Efficacité Dive | 99,89 % | 99,85 % |
 | Port publié sur l'hôte | `5432:5432` | aucun (réseau `backend` interne) |
 | Utilisateur | démarre en root, serveur sous `postgres` (uid 70) via `gosu` | démarre en root (`User: 0`), serveur sous uid 70 |
@@ -443,7 +443,7 @@ avec le même digest.
 ### Mesures locales
 
 Mesures locales du 2026-10-26 (hôte arm64, images `linux/amd64`), toutes sur
-la même image API `flask-api:local` (Image ID `sha256:9eecfae5…`), régénérées
+la même image API `flask-api:local` (Image ID `sha256:f6dd57fe…`), régénérées
 par [`scripts/evidence/regenerate.sh`](scripts/evidence/regenerate.sh).
 
 | Contrôle | Commande | Résultat |
@@ -476,16 +476,17 @@ Preuves détaillées de la stack ([`evidence/`](evidence/)) :
 | [`after/dockerignore.txt`](evidence/after/dockerignore.txt) | fichiers reçus par le build malgré des fichiers parasites |
 | [`after/image.txt`](evidence/after/image.txt) | taille, utilisateur, shell, binaires, permissions |
 | [`after/dive.txt`](evidence/after/dive.txt) | Dive en mode CI |
-| [`after/trivy.txt`](evidence/after/trivy.txt) | Trivy sur l'image finale |
+| [`after/dive-db.txt`](evidence/after/dive-db.txt) | taille et efficacité Dive de l'image PostgreSQL (mesure, non bloquante en CI) |
+| [`after/trivy.txt`](evidence/after/trivy.txt) | Trivy sur l'image finale (toutes sévérités) et gate HIGH/CRITICAL de la CI sur l'archive `docker save` |
 | [`after/trivy-db.txt`](evidence/after/trivy-db.txt) | Trivy sur l'image PostgreSQL Chainguard, et gate HIGH/CRITICAL |
-| [`after/trivy-deps.txt`](evidence/after/trivy-deps.txt) | Trivy sur `requirements.txt` (renommé : Dependabot lisait l'ancien nom `*requirements*.txt` comme un manifeste pip) |
+| [`after/trivy-deps.txt`](evidence/after/trivy-deps.txt) | Trivy sur `requirements.txt`, et gate HIGH/CRITICAL (renommé : Dependabot lisait l'ancien nom `*requirements*.txt` comme un manifeste pip) |
 | [`after/build-cache.txt`](evidence/after/build-cache.txt) | cache des dépendances conservé après modification du code |
 | [`after/runtime-compat.txt`](evidence/after/runtime-compat.txt) | même Python, ABI et glibc entre build et image finale |
 | [`after/image-run.txt`](evidence/after/image-run.txt) | démarrage en lecture seule |
 | [`after/app-functional.txt`](evidence/after/app-functional.txt) | endpoints contre PostgreSQL |
 | [`after/compose-hardening.txt`](evidence/after/compose-hardening.txt) | stack Compose durcie : secret absent, healthy, capabilities, lecture seule, isolation réseau, intégration, persistance |
 
-Les fichiers de `after/` qui dépendent de l'image (tous sauf `flake8.txt` et `hadolint.txt`) se régénèrent avec `scripts/evidence/regenerate.sh` (Docker démarré, Dive et Trivy installés, `PYTHON` pointant vers un Python 3.15 avec `requirements-dev.txt`).
+Les fichiers de `after/` qui dépendent de l'image (tous sauf `flake8.txt` et `hadolint.txt`) se régénèrent avec `scripts/evidence/regenerate.sh` (Docker démarré, Dive et Trivy installés, `PYTHON` pointant vers un Python 3.15 avec `requirements-dev.txt`). Le script ne touche pas au répertoire `secrets/` (secret temporaire fourni par un override Compose), nettoie conteneurs, volumes et fichiers temporaires même en cas d'échec ou d'interruption, et sort en erreur si un résultat attendu n'est pas obtenu.
 
 ## Reproduction locale
 
