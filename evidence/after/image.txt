@@ -1,16 +1,18 @@
-# date: 2026-10-08T13:13:09Z
-# image: flask-api:local sha256:21609806331b30327a113e7b0201eb81e547380af587d1fd35a33314c1fc6589
-# tailles : octets non compressés (somme des couches, dive --json), comme dive.txt ; docker image inspect .Size (contenu compressé, magasin containerd de Docker Desktop) = 33710171 octets
+# date: 2026-10-26T10:15:04Z
+# image: flask-api:local sha256:9eecfae5380a44074aec6c0679dc24859e253ef38c9219422012c87a5c1c4ba0
+# tailles : octets non compressés (somme des couches, dive --json), comme dive.txt ; docker image inspect .Size (contenu compressé, magasin containerd de Docker Desktop) = 35067706 octets
 ## configuration
-id=sha256:21609806331b30327a113e7b0201eb81e547380af587d1fd35a33314c1fc6589 os/arch=linux/amd64
+id=sha256:9eecfae5380a44074aec6c0679dc24859e253ef38c9219422012c87a5c1c4ba0 os/arch=linux/amd64
 Config.User=65532:65532
 Entrypoint=["/app/venv/bin/python","-m","gunicorn"] Cmd=["--bind","0.0.0.0:5000","--workers","2","--worker-tmp-dir","/dev/shm","--no-control-socket","--access-logfile","-","app:app"]
-size_bytes=86619397
-size_MB=86.6 (10^6 octets)
+size_bytes=90384321
+size_MB=90.4 (10^6 octets)
 ## utilisateur effectif
 uid 65532 gid 65532 nom nonroot
 ## shell : docker run --entrypoint /bin/sh flask-api:local -c 'echo shell'
 docker: Error response from daemon: failed to create task for container: failed to create shim task: OCI runtime create failed: runc create failed: unable to start container process: error during container init: exec: "/bin/sh": stat /bin/sh: no such file or directory
+
+Run 'docker run --help' for more information
 exit: 127
 ## binaires et modules (recherche dans PATH et /bin, /sbin, /usr/bin, /usr/sbin)
 sh: absent
@@ -39,11 +41,11 @@ module pytest: absent
 /app/venv 0o40755 uid=0 gid=0
 /app/venv/bin/python 0o120777 uid=0 gid=0 -> /usr/bin/python
 /app : ['app.py', 'venv']
-/app/venv/bin : ['Activate.ps1', 'activate', 'activate.csh', 'activate.fish', 'flask', 'gunicorn', 'gunicornc', 'python', 'python3', 'python3.14', '𝜋thon']
+/app/venv/bin : ['Activate.ps1', 'activate', 'activate.csh', 'activate.fish', 'flask', 'gunicorn', 'gunicornc', 'python', 'python3', 'python3.15']
 écriture /app : False
 écriture /app/app.py : False
 écriture /app/venv : False
-écriture /app/venv/lib/python3.14/site-packages : False
+écriture /app/venv/lib/python3.15/site-packages : False
 entrées de /app modifiables par l utilisateur : 0 []
 ## paquets Python installés
 Flask==3.1.3
@@ -60,18 +62,18 @@ psycopg2-binary==2.9.13
 0B	ENTRYPOINT ["/app/venv/bin/python" "-m" "gun…
 0B	EXPOSE [5000/tcp]
 0B	USER 65532:65532
-0B	WORKDIR /app
-1.82kB	COPY app.py /app/app.py # buildkit
-19MB	COPY --chown=0:0 /app/venv /app/venv # build…
+4.1kB	WORKDIR /app
+12.3kB	COPY app.py /app/app.py # buildkit
+20.6MB	COPY --chown=0:0 /app/venv /app/venv # build…
 0B	ENV PATH=/app/venv/bin:/usr/local/sbin:/usr/…
-129kB	apko
-4.2MB	apko
-1.09MB	apko
-1.47MB	apko
-1.81MB	apko
-1.84MB	apko
-2.08MB	apko
-3.76MB	apko
-7.2MB	apko
-7.29MB	apko
-36.7MB	apko
+1.2MB	apko
+5.21MB	apko
+1.43MB	apko
+1.52MB	apko
+1.87MB	apko
+1.89MB	apko
+3.03MB	apko
+3.82MB	apko
+7.39MB	apko
+7.36MB	apko
+43.3MB	apko
