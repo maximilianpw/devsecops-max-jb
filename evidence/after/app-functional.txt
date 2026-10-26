@@ -1,4 +1,4 @@
-# date: 2026-10-26T10:43:05Z
+# date: 2026-10-26T10:53:18Z
 # contrôle fonctionnel : image flask-api:local sha256:f6dd57fe2cc914f8fe032f9fbd3280e2765bcbc2424abd4965510c057f2428f7 (linux/amd64, Docker Desktop macOS arm64) servie par gunicorn dans la stack docker-compose.yml réelle
 # variables : COMPOSE_PROJECT_NAME=functional-check API_IMAGE=flask-api:local DB_USER=ci_user DB_NAME=ci_db, --env-file /dev/null ; secret généré dans un répertoire temporaire (non consigné), fourni par un override Compose
 # cmd: docker compose --env-file /dev/null up -d --no-build --wait --wait-timeout 180
@@ -48,12 +48,12 @@ collected 9 items / 3 deselected / 6 selected
 
 test_app.py ......                                                       [100%]
 
-======================= 6 passed, 3 deselected in 0.10s ========================
+======================= 6 passed, 3 deselected in 0.08s ========================
 # exit: 0
 == base arrêtée (docker compose stop db)
  Container functional-check-db-1 Stopping 
  Container functional-check-db-1 Stopped 
 == GET /dbtest -> 500 {"db_connection":"failed"}
 == log serveur (détail conservé côté serveur) :
-[2026-10-26 10:43:18,453] ERROR in app: Database connectivity check failed
+[2026-10-26 10:53:31,131] ERROR in app: Database connectivity check failed
 psycopg2.OperationalError: could not translate host name "db" to address: Name or service not known

@@ -1,4 +1,4 @@
-# date: 2026-10-26T10:43:02Z
+# date: 2026-10-26T10:53:15Z
 # image: flask-api:local sha256:f6dd57fe2cc914f8fe032f9fbd3280e2765bcbc2424abd4965510c057f2428f7
 # compatibilité builder / runtime (linux/amd64)
 builder: python 3.15.0 abi cpython-315 arch x86_64 libc ('glibc', '2.44')

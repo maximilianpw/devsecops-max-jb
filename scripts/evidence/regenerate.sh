@@ -40,6 +40,8 @@ SECRET=$WORK/secrets/db_password
 OVERRIDE=$WORK/compose.override.yml
 printf 'secrets:\n  db_password:\n    file: %s\n' "$SECRET" > "$OVERRIDE"
 PROJECTS=""
+RUN_CREATED=""
+CACHE_CREATED=""
 FAILURES=""
 
 cleanup() {
@@ -49,12 +51,19 @@ cleanup() {
     COMPOSE_PROJECT_NAME=$project docker compose --env-file /dev/null \
       -f docker-compose.yml -f "$OVERRIDE" down --volumes --remove-orphans >/dev/null 2>&1 \
       || FAILURES="$FAILURES\n- nettoyage : docker compose down a échoué ($project)"
-    left=$(residues "$project")
+    left=$(residues "$project") || left="inventaire Docker en échec"
     [ "$left" = "0 0 0" ] \
       || FAILURES="$FAILURES\n- nettoyage : ressources restantes pour $project (conteneurs volumes réseaux : $left)"
   done
-  docker rm -f "$RUN_CONTAINER" >/dev/null 2>&1 || true
-  docker image rm "$CACHE_IMAGE" >/dev/null 2>&1 || true
+  # Seules les ressources créées par cette exécution sont supprimées.
+  if [ -n "$RUN_CREATED" ]; then
+    docker rm -f "$RUN_CONTAINER" >/dev/null 2>&1 \
+      || FAILURES="$FAILURES\n- nettoyage : suppression du conteneur $RUN_CONTAINER"
+  fi
+  if [ -n "$CACHE_CREATED" ]; then
+    docker image rm "$CACHE_IMAGE" >/dev/null 2>&1 \
+      || FAILURES="$FAILURES\n- nettoyage : suppression de l'image $CACHE_IMAGE"
+  fi
   rm -rf "$WORK"
   if [ -n "$FAILURES" ]; then
     printf 'Résultat inattendu :%b\n' "$FAILURES" >&2
@@ -62,13 +71,16 @@ cleanup() {
   fi
   exit "$rc"
 }
-# Ressources Docker restantes d'un projet Compose : « conteneurs volumes réseaux ».
+# Ressources Docker d'un projet Compose : « conteneurs volumes réseaux ».
+# Code retour non nul si l'un des inventaires échoue.
 residues() {
-  local filter="label=com.docker.compose.project=$1"
-  echo "$(docker ps -aq --filter "$filter" | wc -l | tr -d ' ')" \
-    "$(docker volume ls -q --filter "$filter" | wc -l | tr -d ' ')" \
-    "$(docker network ls -q --filter "$filter" | wc -l | tr -d ' ')"
+  local filter="label=com.docker.compose.project=$1" containers volumes networks
+  containers=$(docker ps -aq --filter "$filter") || return 1
+  volumes=$(docker volume ls -q --filter "$filter") || return 1
+  networks=$(docker network ls -q --filter "$filter") || return 1
+  echo "$(count_lines "$containers") $(count_lines "$volumes") $(count_lines "$networks")"
 }
+count_lines() { if [ -z "$1" ]; then echo 0; else printf '%s\n' "$1" | wc -l | tr -d ' '; fi; }
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
@@ -265,7 +277,7 @@ wait_health() {
 
 gen_run() {
   local path body
-  docker rm -f "$RUN_CONTAINER" >/dev/null 2>&1 || true
+  RUN_CREATED=1
   docker run -d --name "$RUN_CONTAINER" --platform "$PLATFORM" --read-only --cap-drop ALL \
     --security-opt no-new-privileges -p 127.0.0.1:5051:5000 "$IMAGE" >/dev/null
   wait_health http://127.0.0.1:5051/health
@@ -284,6 +296,7 @@ gen_run() {
   } > "$OUT/image-run.txt"
   expect "image seule : codes HTTP" "health 200 hello 200 dbtest 500" "$(tr '\n' ' ' < "$WORK/run.status" | sed 's/ $//')"
   docker rm -f "$RUN_CONTAINER" >/dev/null
+  RUN_CREATED=""
 }
 
 gen_compat() {
@@ -350,6 +363,7 @@ gen_cache() {
   local repo=$WORK/cache-repo ref copy_id
   copy_repo "$repo"
   ref=$(image_id)
+  CACHE_CREATED=1
   docker buildx build --platform "$PLATFORM" --provenance=false --sbom=false \
     --load -t "$CACHE_IMAGE" "$repo" >/dev/null 2>&1
   copy_id=$(docker image inspect --format '{{.Id}}' "$CACHE_IMAGE")
@@ -367,6 +381,7 @@ gen_cache() {
   expect "cache : installation des dépendances en cache" "CACHED" \
     "$(grep -A1 'builder 4/4\] RUN' "$OUT/build-cache.txt" | sed -n 2p | awk '{print $2}')"
   docker image rm "$CACHE_IMAGE" >/dev/null
+  CACHE_CREATED=""
 }
 
 # Stack Compose comme en CI : image auditée, identifiants de test, secret
@@ -434,7 +449,7 @@ gen_functional() {
 }
 
 gen_hardening() {
-  local id api db rc running secret_value proc containers volumes networks
+  local id api db rc running secret_value proc left
   id=$(image_id)
   compose_env hardening-check
   rm -f "$SECRET"
@@ -575,7 +590,7 @@ except OSError as e:
     echo "# exit: $rc"
     expect "persistance : arrêt de la stack" 0 "$rc"
     expect "persistance : conteneurs supprimés, volume conservé" "0 1" \
-      "$(residues "$COMPOSE_PROJECT_NAME" | cut -d' ' -f1-2)"
+      "$( (residues "$COMPOSE_PROJECT_NAME" || echo "inventaire Docker en échec") | cut -d' ' -f1-2)"
     echo "# cmd: docker compose --env-file /dev/null up -d --no-build --wait --wait-timeout 180"
     rc=0; compose_log up -d --no-build --wait --wait-timeout 180 > "$WORK/up.out" || rc=$?
     grep Healthy "$WORK/up.out" || true
@@ -596,9 +611,9 @@ except OSError as e:
     echo "# exit: $rc"
     expect "nettoyage : docker compose down" 0 "$rc"
     rm -f "$SECRET"
-    read -r containers volumes networks <<< "$(residues "$COMPOSE_PROJECT_NAME")"
-    echo "# résidus : conteneurs=$containers volumes=$volumes réseaux=$networks secret temporaire=$([ -e "$SECRET" ] && echo présent || echo absent)"
-    expect "nettoyage : résidus" "0 0 0" "$containers $volumes $networks"
+    left=$(residues "$COMPOSE_PROJECT_NAME") || left="inventaire Docker en échec"
+    echo "# résidus (conteneurs volumes réseaux) : $left ; secret temporaire : $([ -e "$SECRET" ] && echo présent || echo absent)"
+    expect "nettoyage : résidus" "0 0 0" "$left"
   } > "$OUT/compose-hardening.txt"
 }
 
@@ -610,6 +625,23 @@ for step in "${steps[@]}"; do
     image|dive|dive-db|trivy|run|compat|dockerignore|cache|functional|hardening) ;;
     *) echo "étape inconnue : $step" >&2; exit 2 ;;
   esac
+done
+# Les noms des ressources figurent dans les preuves : plutôt que de supprimer
+# une ressource homonyme préexistante, le script s'arrête sans rien toucher.
+for step in "${steps[@]}"; do
+  case "$step" in
+    run) resource="conteneur $RUN_CONTAINER"
+         ! docker container inspect "$RUN_CONTAINER" >/dev/null 2>&1 ;;
+    cache) resource="image $CACHE_IMAGE"
+           ! docker image inspect "$CACHE_IMAGE" >/dev/null 2>&1 ;;
+    functional|hardening)
+      project=$([ "$step" = functional ] && echo functional-check || echo hardening-check)
+      resource="projet Compose $project"
+      left=$(residues "$project") \
+        || { echo "inventaire Docker en échec pour $project : abandon." >&2; exit 2; }
+      [ "$left" = "0 0 0" ] ;;
+    *) true ;;
+  esac || { echo "$resource déjà présent : supprimez-le avant de régénérer les preuves." >&2; exit 2; }
 done
 build
 for step in "${steps[@]}"; do
