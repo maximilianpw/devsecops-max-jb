@@ -1,4 +1,4 @@
-# date: 2026-10-26T10:15:15Z
+# date: 2026-10-26T10:32:33Z
 # cmd: trivy fs --scanners vuln requirements.txt
 # Version: 0.75.0
 # Vulnerability DB:
@@ -6,7 +6,6 @@
 #   UpdatedAt: 2026-10-26 07:15:18.945937093 +0000 UTC
 #   NextUpdate: 2026-10-27 07:15:18.945936953 +0000 UTC
 #   DownloadedAt: 2026-10-26 10:10:37.442175 +0000 UTC
-# exit: 0
 
 Report Summary
 
@@ -19,3 +18,20 @@ Legend:
 - '-': Not scanned
 - '0': Clean (no security findings detected)
 
+# exit: 0
+
+## gate HIGH/CRITICAL corrigibles
+# cmd: trivy fs --scanners vuln --skip-db-update --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --format table requirements.txt
+
+Report Summary
+
+┌──────────────────┬──────┬─────────────────┐
+│      Target      │ Type │ Vulnerabilities │
+├──────────────────┼──────┼─────────────────┤
+│ requirements.txt │ pip  │        0        │
+└──────────────────┴──────┴─────────────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+
+# exit: 0
