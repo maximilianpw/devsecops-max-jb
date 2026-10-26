@@ -47,8 +47,8 @@ services:
 
   db:
     <<: *hardening
-    # cgr.dev/chainguard/postgres:latest (PostgreSQL 18), relevé le 2026-10-08
-    image: cgr.dev/chainguard/postgres@sha256:0c4eaf6cb9bd65337d834f5ebfe79add4312ee2125ab584bf1fbc071abc6bb8f
+    # cgr.dev/chainguard/postgres:latest (PostgreSQL 18.6), relevé le 2026-10-26
+    image: cgr.dev/chainguard/postgres@sha256:b32c0efe4c15bbc08fcd801f619a7d98d44f3f8eca3ec89efad4941a56e8741c
     # L'image démarre en root pour faire un chown, ce que cap_drop ALL interdit :
     # on lance directement l'utilisateur postgres (UID/GID 70).
     user: "70:70"

@@ -53,27 +53,28 @@ Image de l'API, mesurée avec les outils et seuils de la CI :
 
 | Critère | Avant | Après |
 | --- | --- | --- |
-| Image de base | `python:3.10-slim`, Debian 13.7, tag mouvant | Chainguard Python 3.14.8 (Wolfi), épinglée par digest |
-| Taille décompressée (Dive) | 148,2 MB | 86,6 MB (−42 %) |
-| Taille compressée (`docker image inspect`) | 54,4 MB | 33,7 MB |
+| Image de base | `python:3.10-slim`, Debian 13.7, tag mouvant | Chainguard Python 3.15.0 (Wolfi), épinglée par digest |
+| Taille décompressée (Dive) | 148,2 MB | 90,4 MB (−39 %) |
+| Taille compressée (`docker image inspect`) | 54,4 MB | 35,1 MB |
 | Utilisateur | root (uid 0, aucun `USER`) | `65532:65532` (nonroot) |
 | Shell | oui (`/bin/sh` → `dash`) | non (`exec: "sh": executable file not found`) |
 | Outils de paquets | apt, dpkg, pip | aucun exécutable pip/apk ; `ensurepip` et un wheel pip restent présents (voir § 3) |
 | Serveur web | serveur de développement Flask | gunicorn |
-| Efficacité Dive | 97,35 % | 99,73 % |
+| Efficacité Dive | 97,35 % | 99,72 % |
 | CVE OS, toutes sévérités | 165 (44 HIGH, 58 MEDIUM, 61 LOW, 2 UNKNOWN), 0 corrigible | 0 détectée |
 | CVE Python, toutes sévérités | 20 (3 HIGH, 15 MEDIUM, 2 LOW), 20 corrigibles | 0 détectée |
 | Gate CI (HIGH/CRITICAL corrigibles) | **échec** : 3 HIGH | réussi : 0 |
 
 « 0 détectée » signifie : aucune CVE, toutes sévérités confondues, trouvée par
-Trivy 0.75.0 avec la base publiée le 2026-10-07 07:38 UTC. Trivy n'analyse pas
+Trivy 0.75.0 avec la base publiée le 2026-10-26 07:15 UTC. Trivy n'analyse pas
 les bibliothèques natives embarquées dans le wheel `psycopg2-binary` (libpq,
 OpenSSL, Kerberos…). Ce n'est donc pas une garantie d'absence totale de CVE.
 
-Conditions de mesure : 2026-10-08, Docker 29.5.3 (containerd image store),
+Conditions de mesure : « avant » le 2026-10-08, « après » le 2026-10-26
+(images de base mises à jour, voir § 3), Docker 29.5.3 (containerd image store),
 images `linux/amd64` construites en émulation sur un hôte arm64 avec
 `docker buildx build --platform linux/amd64 --provenance=false --sbom=false`.
-« Avant » = commit `fde7f07` (`main`), « après » = branche `feat/harden-stack`.
+« Avant » = commit `fde7f07`, « après » = digests Chainguard du 2026-10-26.
 Dive 0.13.1 avec [`.dive-ci`](.dive-ci), Trivy 0.75.0 sur l'archive
 `docker save`.
 
@@ -83,8 +84,8 @@ Image PostgreSQL, mêmes conditions de mesure :
 | --- | --- | --- |
 | Image | `postgres:14-alpine` (Alpine 3.24.2, tag mouvant) | `cgr.dev/chainguard/postgres` (Wolfi), épinglée par digest |
 | Version | PostgreSQL 14.24 | PostgreSQL 18.6 |
-| Taille décompressée (Dive) | 284,6 MB | 379,4 MB |
-| Efficacité Dive | 99,89 % | 99,86 % |
+| Taille décompressée (Dive) | 284,6 MB | 361,7 MB ([`dive-db.txt`](evidence/after/dive-db.txt)) |
+| Efficacité Dive | 99,89 % | 99,85 % |
 | Port publié sur l'hôte | `5432:5432` | aucun (réseau `backend` interne) |
 | Utilisateur | démarre en root, serveur sous `postgres` (uid 70) via `gosu` | démarre en root (`User: 0`), serveur sous uid 70 |
 | Shell | oui (`sh`, `bash`) | oui (`sh`, `bash`), requis par le script d'entrée de l'image |
@@ -107,8 +108,8 @@ Le Dockerfile comporte deux étapes :
   dépendances et `app.py`. Pas de shell, pas de pip, pas d'apk, pas de
   compilateur.
 
-Les deux étapes reposent sur Wolfi avec Python 3.14.8 (vérifié dans les deux
-images). Python, l'ABI `cpython-314` et la glibc 2.44 sont identiques
+Les deux étapes reposent sur Wolfi avec Python 3.15.0 (vérifié dans les deux
+images). Python, l'ABI `cpython-315` et la glibc 2.44 sont identiques
 ([`evidence/after/runtime-compat.txt`](evidence/after/runtime-compat.txt)) :
 ce qui est installé à la première étape fonctionne tel quel à la seconde.
 Avec Distroless, il aurait fallu aligner à la main le Python de build sur le
@@ -123,12 +124,24 @@ référencées uniquement par digest, avec la version lisible en commentaire :
 
 | Étape | Image | Digest |
 | --- | --- | --- |
-| build | `python:latest-dev`, Python 3.14.8, relevé le 2026-10-08 | `sha256:894aed3297d91283e1fc4c542f5374a4b5f3726134fda7c94eaa539342be1e05` |
-| final | `python:latest`, Python 3.14.8, relevé le 2026-10-08 | `sha256:b6248c85ba9b97e1e61b30197f309cc4d21661f889fefa5268f0a7bc530dad46` |
+| build | `python:latest-dev`, Python 3.15.0, relevé le 2026-10-26 | `sha256:dde1a2549dd62864f0263dae8e877680837b4e738a7ecc85c671c55c069848ac` |
+| final | `python:latest`, Python 3.15.0, relevé le 2026-10-26 | `sha256:49fd266eb8a1331194c318b742087c7a2939cc5794fa64f17feb9e17e12703e2` |
 
 Ces digests désignent un index OCI multi-architecture (linux/amd64 et
 linux/arm64), vérifié avec `docker buildx imagetools inspect`. Mettre à jour
 une image revient à changer son digest, ce qui reste visible en revue.
+
+**Mise à jour du 2026-10-26.** Les digests du 2026-10-08 sont restés figés
+pendant que des CVE étaient publiées : le gate Trivy a bloqué la CI avec
+4 HIGH corrigibles dans chacune des deux images (`ca-certificates-bundle`
+CVE-2026-111943, `libbrotli*` CVE-2026-111497), API et PostgreSQL. Les trois
+digests ont été mis à jour ; les nouvelles images ne contiennent aucune CVE
+détectée. Chainguard ne publie gratuitement que les tags `latest` et
+`latest-dev` : la mise à jour fait passer Python de 3.14.8 à 3.15.0. Toutes
+les dépendances ont une roue `cp315` (aucune compilation), la CI passe à
+Python 3.15, et les preuves de `evidence/after/` ont été régénérées sur la
+nouvelle image avec
+[`scripts/evidence/regenerate.sh`](scripts/evidence/regenerate.sh).
 
 Côté Python, chaque paquet est épinglé à une version exacte, y compris les
 dépendances de Flask.
@@ -176,7 +189,7 @@ contre une future exception trop large. Test sur une copie du dépôt avec
 ### Limites connues
 
 - Le Python de l'image de base embarque le module `ensurepip` et un wheel
-  `pip-26.2.1`. Sans shell, ils ne peuvent pas être retirés de l'image finale.
+  `pip-26.2.2`. Sans shell, ils ne peuvent pas être retirés de l'image finale.
   `python -m ensurepip` échoue, car aucun dossier Python n'est accessible en
   écriture.
 - `psycopg2-binary` embarque ses propres bibliothèques natives, non analysées
@@ -295,14 +308,14 @@ Choix des versions :
 - **Werkzeug 3.1.9** : corrige les 8 CVE relevées.
 - **Flask 3.1.3** : corrige sa CVE ; Flask 3.1 requiert `werkzeug>=3.1.0`.
 - **psycopg2-binary 2.9.13** : n'était pas épinglé ; désormais fixé, wheel
-  disponible pour Python 3.14.
+  disponible pour Python 3.15 (`cp315`).
 - **gunicorn 26.2.0** : remplace le serveur de développement Flask.
 - **blinker, click, itsdangerous, Jinja2, MarkupSafe** : dépendances de Flask,
   désormais épinglées.
 - **pytest** et ses dépendances : retirés de l'image (15 → 9 paquets,
   vérifié par `importlib.metadata` dans l'image finale).
 
-Compatibilité : les tests unitaires passent en Python 3.14 avec ces
+Compatibilité : les tests unitaires passent en Python 3.15 avec ces
 dépendances. Les tests d'intégration HTTP passent contre l'image finale,
 démarrée par le Compose du dépôt avec PostgreSQL Chainguard 18.6. Image
 lancée seule, sans base, `/dbtest` renvoie le 500 générique.
@@ -330,7 +343,7 @@ Hadolint + pinning ───────┘                   └─ Compose + p
   commentaire), vérifié par la CI. Hadolint 2.15.1, Dive 0.13.1 et Trivy
   0.75.0 sont téléchargés depuis leurs releases officielles avec un SHA256
   épinglé dans le workflow.
-- **Python de la CI** : 3.14, aligné sur l'image runtime.
+- **Python de la CI** : 3.15, aligné sur l'image runtime.
 - **Ordre des gates** : aucun build ni conteneur avant le succès de Flake8,
   des tests unitaires, de Hadolint et du pinning.
 - **Hadolint** : règles DL3002, DL3006, DL3007 et DL4006 forcées en `error`,
@@ -429,16 +442,17 @@ avec le même digest.
 
 ### Mesures locales
 
-Mesures locales du 2026-10-08 (hôte arm64, images `linux/amd64`), toutes sur
-la même image API `flask-api:local` (Image ID `sha256:21609806…`).
+Mesures locales du 2026-10-26 (hôte arm64, images `linux/amd64`), toutes sur
+la même image API `flask-api:local` (Image ID `sha256:f6dd57fe…`), régénérées
+par [`scripts/evidence/regenerate.sh`](scripts/evidence/regenerate.sh).
 
 | Contrôle | Commande | Résultat |
 | --- | --- | --- |
-| Flake8 | `flake8 --config=.flake8 app.py test_app.py tests scripts` (flake8 7.4.1, Python 3.14) | 0 violation |
-| Tests unitaires | `pytest -m "not integration"` (pytest 9.1.1, Python 3.14) | 6 passed |
+| Flake8 | `flake8 --config=.flake8 app.py test_app.py tests scripts` (flake8 7.4.1, Python 3.15) | 0 violation |
+| Tests unitaires | `pytest -m "not integration"` (pytest 9.1.1, Python 3.15) | 6 passed |
 | Hadolint | `hadolint --config .hadolint.yaml Dockerfile` (2.15.1) | 0 alerte, y compris au seuil `info` |
 | Pinning | `scripts/ci/check_pinning.py` | Dockerfile, Compose et actions conformes |
-| Dive ≥ 80 % | `dive --ci --ci-config .dive-ci` (0.13.1) | PASS : 99,73 %, 0,48 % d'octets gaspillés |
+| Dive ≥ 80 % | `dive --ci --ci-config .dive-ci` (0.13.1) | PASS : 99,72 %, 0,50 % d'octets gaspillés |
 | Trivy image | gate HIGH/CRITICAL corrigibles (0.75.0) | 0 ; rapport complet : 0 CVE détectée |
 | Trivy dépendances | `trivy fs` (détecte `requirements.txt`) | 0 |
 | Trivy PostgreSQL | gate HIGH/CRITICAL corrigibles sur l'image Chainguard (0.75.0) | 0 ; rapport complet : 0 CVE détectée |
@@ -448,8 +462,8 @@ la même image API `flask-api:local` (Image ID `sha256:21609806…`).
 | Workflow | `actionlint` 1.7.12 (avec shellcheck) | 0 erreur |
 | Services healthy | `docker compose up -d --no-build --wait` avec `API_IMAGE`, identifiants générés et secret `secrets/db_password` en 0644, comme la CI | `api-python` et `db` healthy ; `api-python` exécute l'Image ID audité |
 | Tests d'intégration | `pytest -m integration tests/integration` | 3 passed |
-| Isolation | connexion à `db:5432` depuis le réseau `frontend` | nom `db` non résolu |
-| Smoke test release | image seule, `GET /health` | 200 `{"status":"ok"}` |
+| Isolation | connexion à `db:5432` depuis le réseau `frontend` | nom `db` non résolu (`gaierror`) |
+| Image seule | `docker run --read-only --cap-drop ALL`, `GET /health` | 200 `{"status":"ok"}` ; `/dbtest` 500 générique |
 | Publication | jobs `Release GHCR` + `Pull public + smoke test` | voir le run de release ci-dessus |
 
 Preuves détaillées de la stack ([`evidence/`](evidence/)) :
@@ -462,18 +476,21 @@ Preuves détaillées de la stack ([`evidence/`](evidence/)) :
 | [`after/dockerignore.txt`](evidence/after/dockerignore.txt) | fichiers reçus par le build malgré des fichiers parasites |
 | [`after/image.txt`](evidence/after/image.txt) | taille, utilisateur, shell, binaires, permissions |
 | [`after/dive.txt`](evidence/after/dive.txt) | Dive en mode CI |
-| [`after/trivy.txt`](evidence/after/trivy.txt) | Trivy sur l'image finale |
+| [`after/dive-db.txt`](evidence/after/dive-db.txt) | taille et efficacité Dive de l'image PostgreSQL (mesure, non bloquante en CI) |
+| [`after/trivy.txt`](evidence/after/trivy.txt) | Trivy sur l'image finale (toutes sévérités) et gate HIGH/CRITICAL de la CI sur l'archive `docker save` |
 | [`after/trivy-db.txt`](evidence/after/trivy-db.txt) | Trivy sur l'image PostgreSQL Chainguard, et gate HIGH/CRITICAL |
-| [`after/trivy-deps.txt`](evidence/after/trivy-deps.txt) | Trivy sur `requirements.txt` (renommé : Dependabot lisait l'ancien nom `*requirements*.txt` comme un manifeste pip) |
+| [`after/trivy-deps.txt`](evidence/after/trivy-deps.txt) | Trivy sur `requirements.txt`, et gate HIGH/CRITICAL (renommé : Dependabot lisait l'ancien nom `*requirements*.txt` comme un manifeste pip) |
 | [`after/build-cache.txt`](evidence/after/build-cache.txt) | cache des dépendances conservé après modification du code |
 | [`after/runtime-compat.txt`](evidence/after/runtime-compat.txt) | même Python, ABI et glibc entre build et image finale |
 | [`after/image-run.txt`](evidence/after/image-run.txt) | démarrage en lecture seule |
 | [`after/app-functional.txt`](evidence/after/app-functional.txt) | endpoints contre PostgreSQL |
-| [`after/compose-hardening.txt`](evidence/after/compose-hardening.txt) | stack Compose durcie : secret absent, healthy, capabilities, lecture seule, intégration, persistance |
+| [`after/compose-hardening.txt`](evidence/after/compose-hardening.txt) | stack Compose durcie : secret absent, healthy, capabilities, lecture seule, isolation réseau, intégration, persistance |
+
+Les fichiers de `after/` qui dépendent de l'image (tous sauf `flake8.txt` et `hadolint.txt`) se régénèrent avec `scripts/evidence/regenerate.sh` (Docker démarré, Dive et Trivy installés, `PYTHON` pointant vers un Python 3.15 avec `requirements-dev.txt`). Le script ne touche pas au répertoire `secrets/` (secret temporaire fourni par un override Compose), nettoie conteneurs, volumes et fichiers temporaires même en cas d'échec ou d'interruption, et sort en erreur si un résultat attendu n'est pas obtenu.
 
 ## Reproduction locale
 
-Prérequis : Docker avec Compose v2 et BuildKit, Python 3.14, Hadolint
+Prérequis : Docker avec Compose v2 et BuildKit, Python 3.15, Hadolint
 2.15.1, Dive 0.13.1, Trivy 0.75.0.
 
 ```bash
