@@ -1,15 +1,58 @@
-# Seuil par défaut d'Hadolint (info) : toute alerte fait échouer le lint.
+# Politique Hadolint de l'équipe, appliquée par le job CI « Hadolint + pinning » :
+#   hadolint --config .hadolint.yaml Dockerfile
+# Chaque règle d'équipe (R1 à R6) est vérifiée sur un Dockerfile fautif par
+# scripts/ci/check_hadolint_policy.py : une règle mal orthographiée ici serait
+# ignorée silencieusement par Hadolint, ce contrôle la fait échouer.
+
+# Tolérance zéro : toute alerte, y compris de niveau info ou style, bloque le build.
 failure-threshold: info
 
-# Seul registre utilisé par le Dockerfile.
+# Aucune exception : pas de règle désactivée, et les commentaires
+# « # hadolint ignore=... » dans le Dockerfile sont sans effet.
+ignored: []
+disable-ignore-pragma: true
+
+# R1 - Images de base : uniquement le registre Chainguard (DL3026).
 trustedRegistries:
   - cgr.dev
 
+# Les règles d'équipe sont toutes en « error » : elles ne se négocient pas, quel
+# que soit leur niveau par défaut. Les autres règles Hadolint gardent leur niveau
+# par défaut et restent bloquantes via failure-threshold.
 override:
   error:
-    - DL3002
-    - DL3006
-    - DL3007
-    - DL4006
-  warning:
-    - SC2086
+    # R1 - Images de base : tag explicite, jamais « latest ».
+    # Le digest @sha256 est exigé par check_pinning.py (Hadolint ne sait pas le faire).
+    - DL3006  # FROM sans tag
+    - DL3007  # FROM ...:latest
+    - DL3026  # registre hors liste trustedRegistries
+
+    # R2 - Exécution sans privilèges.
+    # La présence d'un USER non root est vérifiée par inspection de l'image.
+    - DL3002  # dernier USER = root
+    - DL3004  # sudo dans un RUN
+
+    # R3 - Shell robuste : un échec dans un pipe ou une variable non protégée
+    # ne doit pas passer inaperçu.
+    - DL4006  # pipe sans SHELL -o pipefail
+    - SC2086  # variable non quotée (globbing, découpage)
+    - DL3003  # cd au lieu de WORKDIR
+    - DL4001  # wget et curl mélangés
+
+    # R4 - Copie maîtrisée : pas de téléchargement ni d'extraction implicites,
+    # chemins et étapes sans ambiguïté.
+    - DL3020  # ADD au lieu de COPY
+    - DL3021  # COPY de plusieurs sources vers une cible sans « / »
+    - DL3022  # COPY --from vers une étape non déclarée
+    - DL3045  # COPY vers un chemin relatif sans WORKDIR
+    - DL3000  # WORKDIR relatif
+
+    # R5 - Dépendances Python : versions épinglées, aucun cache pip dans l'image.
+    - DL3013  # pip install d'un paquet sans version
+    - DL3042  # pip install sans --no-cache-dir
+
+    # R6 - Démarrage prévisible : forme JSON (signaux reçus par le processus
+    # applicatif, pas par un shell), une seule instruction de démarrage.
+    - DL3025  # CMD / ENTRYPOINT en forme shell
+    - DL4003  # plusieurs CMD
+    - DL4004  # plusieurs ENTRYPOINT
