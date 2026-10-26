@@ -73,6 +73,11 @@ jobs:
       - name: Hadolint
         run: hadolint --config .hadolint.yaml Dockerfile
 
+      - name: Politique Hadolint (règles d'équipe testées)
+        # Hadolint ignore sans erreur un code de règle mal saisi : chaque règle
+        # d'équipe est rejouée sur un Dockerfile fautif et doit bloquer en error.
+        run: python3 scripts/ci/check_hadolint_policy.py
+
       - name: Images et actions épinglées
         # `compose config` ne lance aucun conteneur : il résout seulement le YAML.
         run: |
