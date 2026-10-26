@@ -55,7 +55,6 @@ def test_dockerfile_du_depot_conforme():
         f"{BASE}\nRUN echo a<<EOF\n{ADD_URL}\n",
         f"{BASE}\nA\\\nDD https://example.com/app.tar.gz /app/\n",
         f"{BASE}\nCOPY <<'' /x\n{ADD_URL}\n\nUSER 65532\n",
-        f"# commentaire\n\n# escape=`\n{BASE}\n{ADD_URL}\n",
     ],
     ids=[
         "simple",
@@ -72,7 +71,6 @@ def test_dockerfile_du_depot_conforme():
         "faux-heredoc-colle-a-un-mot",
         "mot-cle-coupe-par-continuation",
         "heredoc-nom-vide",
-        "directive-apres-ligne-vide-est-un-commentaire",
     ],
 )
 def test_add_refuse(tmp_path, content):
@@ -106,6 +104,7 @@ def test_heredoc_n_est_pas_une_instruction(tmp_path, opening, name):
         (f"{BASE}\nLABEL p=\\\\\\\n{ADD_URL}\n", "échappement final ambigu"),
         (f"# escape=`\n{BASE}\nLABEL n=v`\n{ADD_URL}\n", "directive de parseur"),
         (f"  # escape=`\n{BASE}\n", "directive de parseur interdite"),
+        (f"# commentaire\n\n# escape=`\n{BASE}\n", "directive de parseur"),
         (f"# anything=x\n# escape=`\n{BASE}\n", "directive de parseur interdite"),
         (f"# syntax=docker/dockerfile:1\n{BASE}\n", "directive de parseur interdite"),
         (f'{BASE}\nCOPY <<"E\\OF" /x\nE\\OF\n', "délimiteur de heredoc non supporté"),
@@ -119,6 +118,7 @@ def test_heredoc_n_est_pas_une_instruction(tmp_path, opening, name):
         "triple-antislash",
         "directive-escape",
         "directive-indentee",
+        "directive-apres-ligne-vide",
         "directive-apres-directive-inconnue",
         "directive-syntax",
         "delimiteur-avec-echappement",
@@ -265,3 +265,78 @@ def test_arg_differe_ou_local_ne_modifie_pas_from(tmp_path, instruction):
     assert dockerfile_errors(tmp_path, content) == [
         "image non épinglée par digest : cgr.dev/chainguard/python:latest-dev"
     ]
+
+
+FRONTEND = (
+    '# syntax=docker/dockerfile:1@sha256:'
+    '4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e'
+)
+TP2_PIP = (
+    f'{FRONTEND}\n{BASE}\n'
+    'ENV PIP_CACHE_DIR=/home/nonroot/.cache/pip\n'
+    'RUN --mount=type=cache,target=/home/nonroot/.cache/pip,'
+    'uid=65532,gid=65532,sharing=locked '
+    '--mount=type=secret,id=package_token,required=true,'
+    'uid=65532,gid=65532,mode=0400 '
+    'test -s /run/secrets/package_token && '
+    'pip --python /app/venv/bin/python install -r /app/requirements.txt\n'
+    'USER 65532\n'
+)
+
+
+def test_frontend_epingle_accepte_sans_elargir_from(tmp_path):
+    assert dockerfile_errors(tmp_path, f'{FRONTEND}\n{BASE}\n') == []
+    assert dockerfile_errors(tmp_path, f'{FRONTEND}\nFROM python:latest\n')
+
+
+@pytest.mark.parametrize('prefix', ['\n', '# commentaire\n', FRONTEND + '\n'])
+def test_frontend_hors_premiere_ligne_refuse(tmp_path, prefix):
+    assert dockerfile_errors(tmp_path, prefix + FRONTEND + '\n' + BASE)
+
+
+@pytest.mark.parametrize('frontend', [
+    FRONTEND.replace('docker/dockerfile:1', 'evil/frontend:1'),
+    FRONTEND.replace('docker/dockerfile:1', 'docker/dockerfile:1-labs'),
+    FRONTEND.split('@')[0], FRONTEND + ' # commentaire',
+    FRONTEND.replace('sha256:', 'sha512:'),
+])
+def test_frontend_hors_contrat_refuse(tmp_path, frontend):
+    assert dockerfile_errors(tmp_path, frontend + '\n' + BASE)
+
+
+def test_pip_cache_tp2_accepte(tmp_path):
+    path = tmp_path / 'Dockerfile'
+    path.write_text(TP2_PIP)
+    assert pinning.check_dockerfile(path, require_tp2=True) == []
+
+
+@pytest.mark.parametrize('old,new', [
+    ('target=/home/nonroot/.cache/pip', 'target=/root/.cache/pip'),
+    ('uid=65532', 'uid=0'), ('gid=65532', 'gid=0'),
+    ('sharing=locked', 'sharing=shared'),
+    ('ENV PIP_CACHE_DIR=/home/nonroot/.cache/pip\n', ''),
+    (' install -r', ' install --no-cache-dir -r'),
+    (' install -r', ' install --cache-dir=/tmp/pip -r'),
+    ('test -s', 'PIP_CACHE_DIR=/tmp pip --version && test -s'),
+    ('test -s', 'ln -s /tmp /home/nonroot/.cache/pip && test -s'),
+    ('type=cache', 'type=bind'),
+    ('sharing=locked', 'sharing=locked,sharing=shared'),
+    ('/app/requirements.txt\n', '/app/requirements.txt && echo done\n'),
+])
+def test_pip_cache_incorrect_refuse(tmp_path, old, new):
+    assert dockerfile_errors(tmp_path, TP2_PIP.replace(old, new))
+
+
+def test_cache_pip_ordinaire_refuse(tmp_path):
+    assert dockerfile_errors(tmp_path, f'{BASE}\nRUN pip install flask==3.1.2\n')
+
+
+def test_tp1_accepte_mais_refuse_en_mode_tp2():
+    assert pinning.check_dockerfile(ROOT / 'Dockerfile', require_tp2=True)
+
+
+@pytest.mark.skipif(shutil.which('hadolint') is None, reason='Hadolint absent')
+def test_hadolint_reconnait_cache_exact_du_contrat(tmp_path):
+    path = tmp_path / 'Dockerfile'
+    path.write_text(TP2_PIP)
+    assert policy.hadolint(ROOT / '.hadolint.yaml', path) == (0, [])
