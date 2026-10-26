@@ -314,6 +314,9 @@ def test_pip_cache_tp2_accepte(tmp_path):
     ('target=/home/nonroot/.cache/pip', 'target=/root/.cache/pip'),
     ('uid=65532', 'uid=0'), ('gid=65532', 'gid=0'),
     ('sharing=locked', 'sharing=shared'),
+    ('required=true', 'required=false'),
+    ('mode=0400', 'mode=0444'),
+    ('id=package_token', 'id=other_token'),
     ('ENV PIP_CACHE_DIR=/home/nonroot/.cache/pip\n', ''),
     (' install -r', ' install --no-cache-dir -r'),
     (' install -r', ' install --cache-dir=/tmp/pip -r'),
@@ -331,8 +334,11 @@ def test_cache_pip_ordinaire_refuse(tmp_path):
     assert dockerfile_errors(tmp_path, f'{BASE}\nRUN pip install flask==3.1.2\n')
 
 
-def test_tp1_accepte_mais_refuse_en_mode_tp2():
-    assert pinning.check_dockerfile(ROOT / 'Dockerfile', require_tp2=True)
+def test_tp1_accepte_mais_refuse_en_mode_tp2(tmp_path):
+    path = tmp_path / 'Dockerfile'
+    path.write_text(f'{BASE}\nRUN pip install --no-cache-dir flask==3.1.2\n')
+    assert pinning.check_dockerfile(path) == []
+    assert pinning.check_dockerfile(path, require_tp2=True)
 
 
 @pytest.mark.skipif(shutil.which('hadolint') is None, reason='Hadolint absent')

@@ -1,0 +1,48 @@
+name: TP2 archive scans on amd64
+on:
+  workflow_call:
+    inputs:
+      arch:
+        type: string
+        required: true
+      image:
+        type: string
+        required: true
+      image-id:
+        type: string
+        required: true
+      archive-sha256:
+        type: string
+        required: true
+      artifact-id:
+        type: string
+        required: true
+permissions: {}
+jobs:
+  scan:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      IMAGE: ${{ inputs.image }}
+      EXPECTED_IMAGE_ID: ${{ inputs.image-id }}
+      EXPECTED_SHA256: ${{ inputs.archive-sha256 }}
+      EXPECTED_PLATFORM: linux/${{ inputs.arch }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          artifact-ids: ${{ inputs.artifact-id }}
+          path: dist
+          merge-multiple: true
+      - run: scripts/ci/install_tools.sh dive trivy
+      - run: scripts/ci/scan_variant.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: ${{ always() }}
+        with:
+          name: scan-reports-${{ inputs.arch }}-${{ github.run_attempt }}
+          path: reports/
+          if-no-files-found: warn
+          retention-days: 30

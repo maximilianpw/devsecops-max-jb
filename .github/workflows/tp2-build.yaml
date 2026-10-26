@@ -1,0 +1,69 @@
+name: TP2 build and native integration
+on:
+  workflow_call:
+    inputs:
+      arch:
+        type: string
+        required: true
+      runner:
+        type: string
+        required: true
+    outputs:
+      image:
+        value: ${{ jobs.variant.outputs.image }}
+      image-id:
+        value: ${{ jobs.variant.outputs.image-id }}
+      archive-sha256:
+        value: ${{ jobs.variant.outputs.archive-sha256 }}
+      artifact-id:
+        value: ${{ jobs.variant.outputs.artifact-id }}
+      platform:
+        value: ${{ jobs.variant.outputs.platform }}
+permissions: {}
+jobs:
+  variant:
+    runs-on: ${{ inputs.runner }}
+    permissions:
+      contents: read
+    outputs:
+      image: ${{ steps.build.outputs.image }}
+      image-id: ${{ steps.build.outputs.image_id }}
+      archive-sha256: ${{ steps.build.outputs.archive_sha256 }}
+      platform: ${{ steps.build.outputs.platform }}
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.15'
+      - run: python -m pip install --disable-pip-version-check -r requirements-dev.txt
+      - name: Bake, secrets and cache proofs
+        id: build
+        env:
+          ARCH: ${{ inputs.arch }}
+        run: scripts/ci/build_variant.sh
+      - name: Native Compose and HTTP tests
+        env:
+          IMAGE: ${{ steps.build.outputs.image }}
+          EXPECTED_PLATFORM: ${{ steps.build.outputs.platform }}
+          EXPECTED_IMAGE_ID: ${{ steps.build.outputs.image_id }}
+          EXPECTED_SHA256: ${{ steps.build.outputs.archive_sha256 }}
+        run: |
+          scripts/ci/load_verified_image.sh dist
+          scripts/ci/test_variant.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        id: upload
+        with:
+          name: images-${{ inputs.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 3
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: ${{ always() }}
+        with:
+          name: build-reports-${{ inputs.arch }}-${{ github.run_attempt }}
+          path: reports/
+          if-no-files-found: warn
+          retention-days: 30

@@ -267,6 +267,14 @@ def check_pip_cache(parsed, require_tp2=False):
                 errors.append("option de montage dupliquée")
             mounts.append(options)
         caches = [m for m in mounts if m.get("type") == "cache"]
+        if caches or require_tp2:
+            secrets = [m for m in mounts if m.get("type") == "secret"]
+            expected_secret = {
+                "type": "secret", "id": "package_token", "required": "true",
+                "uid": "65532", "gid": "65532", "mode": "0400",
+            }
+            if secrets != [expected_secret]:
+                errors.append("montage secret package_token hors contrat")
         if not caches and not require_tp2 and "--no-cache-dir" in words:
             continue
         if caches != [CACHE_MOUNT] or not cache_env:
