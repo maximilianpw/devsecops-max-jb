@@ -8,6 +8,12 @@
 #   scripts/evidence/hadolint.sh > evidence/after/hadolint.txt 2>&1
 # Variable PYTHON : interpréteur utilisé (défaut python3).
 set -u
+if [ -f docker-bake.hcl ]; then
+  echo "# TP2 : cache BuildKit contrôlé sans exception DL3042"
+  docker compose config --no-interpolate --format json \
+    | "${PYTHON:-python3}" scripts/ci/check_pinning.py --compose-json - --require-tp2 \
+    || exit 1
+fi
 PY=${PYTHON:-python3}
 C=scripts/ci/check_hadolint_policy.py
 # Instruction FROM de l'étape finale du Dockerfile (image épinglée par digest).

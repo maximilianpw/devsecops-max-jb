@@ -21,6 +21,10 @@
 # - aucune valeur de mot de passe n'est écrite dans les preuves.
 set -euo pipefail
 
+if [ -f docker-bake.hcl ]; then
+  exec scripts/evidence/tp2.sh "$@"
+fi
+
 IMAGE=flask-api:local
 PLATFORM=linux/amd64
 OUT=evidence/after

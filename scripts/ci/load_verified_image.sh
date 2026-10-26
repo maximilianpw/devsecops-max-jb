@@ -1,26 +1,18 @@
 #!/usr/bin/env bash
-# Charge l'archive produite par le job build après avoir vérifié qu'il s'agit
-# bien de l'image auditée : checksum de l'archive puis identifiant de l'image.
-#
-# Usage : load_verified_image.sh <répertoire de l'artefact>
-# Variables requises : IMAGE, EXPECTED_IMAGE_ID, EXPECTED_SHA256.
+# Valeurs attendues issues des outputs du job producteur ; jamais de l’artefact.
 set -euo pipefail
-
 dir="${1:?usage: load_verified_image.sh <dossier>}"
-: "${IMAGE:?}" "${EXPECTED_IMAGE_ID:?}" "${EXPECTED_SHA256:?}"
-
-actual_sha256="$(sha256sum "$dir/image.tar" | cut -d' ' -f1)"
-if [ "$actual_sha256" != "$EXPECTED_SHA256" ]; then
-  echo "::error::Checksum de l'archive inattendu : $actual_sha256 (attendu $EXPECTED_SHA256)"
-  exit 1
-fi
-(cd "$dir" && sha256sum --check --strict image.tar.sha256)
-
+: "${IMAGE:?}" "${EXPECTED_IMAGE_ID:?}" "${EXPECTED_SHA256:?}" "${EXPECTED_PLATFORM:?}"
+python3 scripts/ci/image_archive.py verify "$dir"
 docker load --input "$dir/image.tar"
-
-actual_id="$(docker image inspect --format '{{.Id}}' "$IMAGE")"
-if [ "$actual_id" != "$EXPECTED_IMAGE_ID" ]; then
-  echo "::error::Image ID inattendu pour $IMAGE : $actual_id (attendu $EXPECTED_IMAGE_ID)"
-  exit 1
-fi
-echo "Image vérifiée : $IMAGE ($actual_id)"
+# Docker 29/containerd expose parfois le digest du manifeste dans .Id.
+# Re-sauvegarder vérifie le config digest et les DiffIDs effectivement chargés.
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+docker save --output "$work/loaded.tar" "$IMAGE"
+python3 scripts/ci/image_archive.py describe "$work/loaded.tar" > "$work/loaded.json"
+actual_id=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])' "$work/loaded.json")
+actual_platform="$(docker image inspect --platform "$EXPECTED_PLATFORM" --format '{{.Os}}/{{.Architecture}}' "$IMAGE")"
+[ "$actual_id" = "$EXPECTED_IMAGE_ID" ]
+[ "$actual_platform" = "$EXPECTED_PLATFORM" ]
+echo "Image vérifiée : $IMAGE ($actual_id, $actual_platform)"
