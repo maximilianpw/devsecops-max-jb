@@ -1,4 +1,4 @@
-# date: 2026-10-26T11:06:59Z
+# date: 2026-10-26T11:08:47Z
 # Haskell Dockerfile Linter 2.15.1
 # cmd: hadolint --config .hadolint.yaml Dockerfile
 exit: 0
@@ -350,8 +350,21 @@ check_pinning: ['ADD interdit, utiliser COPY : ADD absent /x/']
 buildkit: TARGET            DESCRIPTION
 buildkit: mutable (default) 
 check_pinning: ['image non épinglée par digest : cgr.dev/chainguard/python:latest-dev']
-# ONBUILD ARG ne change pas les arguments du build courant
-## onbuild-arg
+# Les ARG locaux et différés ne changent pas les arguments globaux des FROM
+## arg-scope
+    ARG TAG=latest-dev
+    FROM scratch AS builder
+    ARG TAG=latest-dev@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    FROM cgr.dev/chainguard/python:${TAG}
+    USER 65532
+hadolint exit: 0
+1 violation(s) de pinning ou de durcissement.
+::error::arg-scope: image non épinglée par digest : cgr.dev/chainguard/python:latest-dev
+check_pinning exit: 1
+#2 [internal] load metadata for cgr.dev/chainguard/python:latest-dev
+#4 [stage-1 1/1] FROM cgr.dev/chainguard/python:latest-dev@sha256:894aed3297d91283e1fc4c542f5374a4b5f3726134fda7c94eaa539342be1e05
+buildkit exit: 0
+## arg-scope
     ARG TAG=latest-dev
     FROM scratch AS builder
     ONBUILD ARG TAG=latest-dev@sha256:0000000000000000000000000000000000000000000000000000000000000000
@@ -359,7 +372,7 @@ check_pinning: ['image non épinglée par digest : cgr.dev/chainguard/python:lat
     USER 65532
 hadolint exit: 0
 1 violation(s) de pinning ou de durcissement.
-::error::onbuild-arg: image non épinglée par digest : cgr.dev/chainguard/python:latest-dev
+::error::arg-scope: image non épinglée par digest : cgr.dev/chainguard/python:latest-dev
 check_pinning exit: 1
 #2 [internal] load metadata for cgr.dev/chainguard/python:latest-dev
 #4 [stage-1 1/1] FROM cgr.dev/chainguard/python:latest-dev@sha256:894aed3297d91283e1fc4c542f5374a4b5f3726134fda7c94eaa539342be1e05

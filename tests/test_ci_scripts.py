@@ -254,11 +254,12 @@ def test_descripteur_unicode_ne_masque_pas_add(tmp_path):
     assert len(errors) == 1 and errors[0].startswith("ADD interdit")
 
 
-def test_onbuild_arg_ne_modifie_pas_from(tmp_path):
+@pytest.mark.parametrize("instruction", ["ARG", "ONBUILD ARG"])
+def test_arg_differe_ou_local_ne_modifie_pas_from(tmp_path, instruction):
     digest = "a" * 64
     content = (
         "ARG TAG=latest-dev\nFROM scratch AS builder\n"
-        f"ONBUILD ARG TAG=latest-dev@sha256:{digest}\n"
+        f"{instruction} TAG=latest-dev@sha256:{digest}\n"
         "FROM cgr.dev/chainguard/python:${TAG}\nUSER 65532\n"
     )
     assert dockerfile_errors(tmp_path, content) == [

@@ -117,13 +117,15 @@ cmp descripteur-unicode 'FROM scratch AS u\nRUN cat ١<<EOF\nFROM scratch\nADD a
 cmp bom '\xef\xbb\xbfFROM cgr.dev/chainguard/python:latest-dev AS mutable\n' --call=targets
 rm -rf "$w"
 
-echo "# ONBUILD ARG ne change pas les arguments du build courant"
-w=$(mktemp -d)
-lim onbuild-arg "ARG TAG=latest-dev\nFROM scratch AS builder\nONBUILD ARG TAG=latest-dev@sha256:$(printf '%064d' 0)\nFROM cgr.dev/chainguard/python:\${TAG}\nUSER 65532\n"
-pin onbuild-arg
-cp "$w/onbuild-arg" "$w/Dockerfile"
-docker buildx build --progress=plain -o type=cacheonly "$w" > "$w/log" 2>&1
-rc=$?
-grep -E 'load metadata|FROM cgr.dev' "$w/log"
-echo "buildkit exit: $rc"
-rm -rf "$w"
+echo "# Les ARG locaux et différés ne changent pas les arguments globaux des FROM"
+for instruction in ARG 'ONBUILD ARG'; do
+  w=$(mktemp -d)
+  lim arg-scope "ARG TAG=latest-dev\nFROM scratch AS builder\n$instruction TAG=latest-dev@sha256:$(printf '%064d' 0)\nFROM cgr.dev/chainguard/python:\${TAG}\nUSER 65532\n"
+  pin arg-scope
+  cp "$w/arg-scope" "$w/Dockerfile"
+  docker buildx build --progress=plain -o type=cacheonly "$w" > "$w/log" 2>&1
+  rc=$?
+  grep -E 'load metadata|FROM cgr.dev' "$w/log"
+  echo "buildkit exit: $rc"
+  rm -rf "$w"
+done

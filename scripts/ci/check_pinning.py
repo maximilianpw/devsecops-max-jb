@@ -226,6 +226,7 @@ def check_dockerfile(path):
     errors = []
     args = {}
     stages = set()
+    before_first_from = True
     try:
         # Lecture en octets : read_text() convertirait \r en \n sans le dire.
         parsed = instructions(Path(path).read_bytes().decode("utf-8"))
@@ -240,7 +241,7 @@ def check_dockerfile(path):
                     f"{path}: ADD interdit, utiliser COPY : ONBUILD ADD {trigger_args}"
                 )
             continue
-        if keyword == "ARG":
+        if keyword == "ARG" and before_first_from:
             name, _, default = rest.strip().partition("=")
             args[name.strip()] = default.strip().strip("\"'")
             continue
@@ -249,6 +250,7 @@ def check_dockerfile(path):
             continue
         if keyword != "FROM":
             continue
+        before_first_from = False
         tokens = [t for t in rest.split() if not t.startswith("--")]
         if not tokens:
             errors.append(f"{path}: FROM sans image")
