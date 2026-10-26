@@ -151,9 +151,11 @@ Contraintes vérifiées automatiquement par la CI
 
 - chaque `FROM` du Dockerfile est épinglé par `@sha256:`, et aucune
   instruction `ADD` n'est acceptée ; le Dockerfile est lu selon sa syntaxe
-  (commentaires retirés avant les continuations, directive `# escape=`,
-  heredocs, mot-clé séparé par tout blanc, `ONBUILD`), comportement comparé
-  à BuildKit dans [`evidence/after/hadolint.txt`](evidence/after/hadolint.txt) ;
+  comme BuildKit (BOM ignoré, commentaires retirés avant les continuations,
+  directive `# escape=`, mot-clé séparé par tout blanc, `ONBUILD`, heredocs
+  reconnus en forme shell de `RUN`/`COPY`/`ADD` avec leur délimiteur complet,
+  heredoc non terminé refusé) ; 12 cas comparés à BuildKit dans
+  [`evidence/after/hadolint.txt`](evidence/after/hadolint.txt) ;
 - chaque ligne de `requirements.txt` et `requirements-dev.txt` est de la
   forme `nom==version` ;
 - PostgreSQL utilise `cgr.dev/chainguard/postgres@sha256:…` et ne publie
@@ -490,7 +492,7 @@ par [`scripts/evidence/regenerate.sh`](scripts/evidence/regenerate.sh).
 | Contrôle | Commande | Résultat |
 | --- | --- | --- |
 | Flake8 | `flake8 --config=.flake8 app.py test_app.py tests scripts` (flake8 7.4.1, Python 3.15) | 0 violation |
-| Tests unitaires | `pytest -m "not integration"` (pytest 9.1.1, Python 3.15) | 39 passed : 6 pour l'application, 33 pour les contrôles de CI ([`tests/test_ci_scripts.py`](tests/test_ci_scripts.py) : contournements de `check_pinning.py` et mutations de `.hadolint.yaml`) ; en CI, le cas qui exécute Hadolint est ignoré dans ce job (Hadolint n'y est pas installé), son contrôle est fait par `check_hadolint_policy.py` |
+| Tests unitaires | `pytest -m "not integration"` (pytest 9.1.1, Python 3.15) | 50 passed : 6 pour l'application, 44 pour les contrôles de CI ([`tests/test_ci_scripts.py`](tests/test_ci_scripts.py) : contournements de `check_pinning.py` et mutations de `.hadolint.yaml`) ; dans le job CI sans Hadolint, seule la variante du test des alertes en double qui appelle le vrai binaire est ignorée ; une variante simulée s'y exécute |
 | Hadolint | `hadolint --config .hadolint.yaml Dockerfile` (2.15.1) | 0 alerte, y compris au seuil `style` |
 | Politique Hadolint | `scripts/ci/check_hadolint_policy.py` (2.15.1) | configuration conforme ; 19 règles d'équipe bloquantes en `error` ; seuil `style` et refus des pragmas effectifs |
 | Pinning | `scripts/ci/check_pinning.py` | Dockerfile (sans `ADD`), Compose, `requirements*.txt` (`==`) et actions conformes |

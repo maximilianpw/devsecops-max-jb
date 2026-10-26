@@ -1,4 +1,4 @@
-# date: 2026-10-26T09:48:02Z
+# date: 2026-10-26T10:22:49Z
 # Haskell Dockerfile Linter 2.15.1
 # cmd: hadolint --config .hadolint.yaml Dockerfile
 exit: 0
@@ -171,17 +171,19 @@ hadolint exit: 1
 check_pinning exit: 1
 
 # lecture du Dockerfile par check_pinning.py comparée à BuildKit (FROM scratch, sans téléchargement)
-# BuildKit échoue sur « absent » si ADD est une instruction ; check_pinning.py doit refuser le même ADD
+# BuildKit échoue sur « absent » quand ADD est une instruction réelle ; check_pinning.py doit refuser exactement ces ADD
 ## commentaire-antislash
     FROM scratch
     # commentaire \
     ADD absent /x
 buildkit: [1/1] ADD absent /x
+buildkit: erreur "/absent": not found
 check_pinning: ['ADD interdit, utiliser COPY : ADD absent /x']
 ## tabulation
     FROM scratch
     ADD^Iabsent /x
 buildkit: [1/1] ADD	ABSENT /x
+buildkit: erreur "/absent": not found
 check_pinning: ['ADD interdit, utiliser COPY : ADD absent /x']
 ## heredoc
     FROM scratch
@@ -190,3 +192,73 @@ check_pinning: ['ADD interdit, utiliser COPY : ADD absent /x']
     EOF
 buildkit: [1/1] COPY <<EOF /x
 check_pinning: []
+## faux-heredoc-guillemets
+    FROM scratch AS u
+    RUN echo '<<EOF'
+    FROM scratch
+    ADD absent /x
+buildkit: erreur "/absent": not found
+check_pinning: ['ADD interdit, utiliser COPY : ADD absent /x']
+## faux-heredoc-json
+    FROM scratch AS u
+    RUN ["echo", "<<EOF"]
+    FROM scratch
+    ADD absent /x
+buildkit: erreur "/absent": not found
+check_pinning: ['ADD interdit, utiliser COPY : ADD absent /x']
+## faux-heredoc-colle
+    FROM scratch AS u
+    RUN echo a<<EOF
+    FROM scratch
+    ADD absent /x
+buildkit: erreur "/absent": not found
+check_pinning: ['ADD interdit, utiliser COPY : ADD absent /x']
+## delimiteur-complet
+    FROM scratch
+    COPY <<EOF-X /x
+    texte
+    EOF-X
+    
+    ADD absent /y
+buildkit: [1/2] COPY <<EOF-X /x
+buildkit: [2/2] ADD absent /y
+buildkit: erreur "/absent": not found
+check_pinning: ['ADD interdit, utiliser COPY : ADD absent /y']
+## delimiteur-numerique
+    FROM scratch
+    COPY <<123 /x
+    ADD texte /y
+    123
+    
+buildkit: [1/1] COPY <<123 /x
+check_pinning: []
+## delimiteur-entre-guillemets
+    FROM scratch
+    COPY <<'EOF-X' /x
+    ADD texte /y
+    EOF-X
+    ADD absent /z
+buildkit: [2/2] ADD absent /z
+buildkit: [1/2] COPY <<EOF-X /x
+buildkit: erreur "/absent": not found
+check_pinning: ['ADD interdit, utiliser COPY : ADD absent /z']
+## descripteur
+    FROM scratch AS u
+    RUN cat 0<<EOF
+    ADD absent /y
+    EOF
+    FROM scratch
+    ADD absent2 /z
+buildkit: erreur "/absent2": not found
+check_pinning: ['ADD interdit, utiliser COPY : ADD absent2 /z']
+## non-termine
+    FROM scratch
+    COPY <<EOF /x
+    ADD absent /y
+buildkit: erreur unterminated heredoc
+check_pinning: ["Dockerfile illisible : heredoc 'EOF' non terminé (COPY <<EOF /x)"]
+## bom
+    ﻿FROM cgr.dev/chainguard/python:latest-dev AS mutable
+buildkit: TARGET            DESCRIPTION
+buildkit: mutable (default) 
+check_pinning: ['image non épinglée par digest : cgr.dev/chainguard/python:latest-dev']

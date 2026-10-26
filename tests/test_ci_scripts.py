@@ -49,6 +49,11 @@ def test_dockerfile_du_depot_conforme():
         f"# escape=`\n{BASE}\nRUN echo `\n  b\n{ADD_URL}\n",
         f"{BASE}\nRUN <<-EOT sh\n\techo ok\n\tEOT\n{ADD_URL}\n",
         f"{BASE}\nADD a \\\n",
+        f"FROM scratch AS u\nRUN echo '<<EOF'\n{BASE}\n{ADD_URL}\n",
+        f'FROM scratch AS u\nRUN ["echo", "<<EOF"]\n{BASE}\n{ADD_URL}\n',
+        f"{BASE}\nCOPY <<EOF-X /x\ntexte\nEOF-X\n\n{ADD_URL}\n",
+        f"{BASE}\nRUN cat 0<<EOF\ntexte\nEOF\n{ADD_URL}\n",
+        f"{BASE}\nRUN echo a<<EOF\n{ADD_URL}\n",
     ],
     ids=[
         "simple",
@@ -59,6 +64,11 @@ def test_dockerfile_du_depot_conforme():
         "directive-escape",
         "apres-heredoc",
         "continuation-en-fin-de-fichier",
+        "faux-heredoc-entre-guillemets",
+        "faux-heredoc-forme-json",
+        "delimiteur-complet",
+        "heredoc-avec-descripteur",
+        "faux-heredoc-colle-a-un-mot",
     ],
 )
 def test_add_refuse(tmp_path, content):
@@ -66,13 +76,35 @@ def test_add_refuse(tmp_path, content):
     assert len(errors) == 1 and errors[0].startswith("ADD interdit")
 
 
-@pytest.mark.parametrize("quote", ["", "'", '"'])
-def test_heredoc_n_est_pas_une_instruction(tmp_path, quote):
+@pytest.mark.parametrize(
+    "opening, name",
+    [
+        ("RUN cat <<EOF > /tmp/x", "EOF"),
+        ("RUN cat <<'EOF' > /tmp/x", "EOF"),
+        ('RUN cat <<"EOF" > /tmp/x', "EOF"),
+        ("COPY <<123 /x", "123"),
+        ("COPY <<'EOF-X' /x", "EOF-X"),
+        ("COPY <<-EOF /x", "\tEOF"),
+    ],
+)
+def test_heredoc_n_est_pas_une_instruction(tmp_path, opening, name):
     content = (
-        f"{BASE}\nRUN cat <<{quote}EOF{quote} > /tmp/x\n"
-        "ADD texte\nFROM python:latest\nEOF\nUSER 65532\n"
+        f"{BASE}\n{opening}\nADD texte /y\nFROM python:latest\n{name}\n\n"
+        "USER 65532\n"
     )
     assert dockerfile_errors(tmp_path, content) == []
+
+
+def test_heredoc_non_termine_refuse(tmp_path):
+    errors = dockerfile_errors(tmp_path, f"{BASE}\nCOPY <<EOF /x\n{ADD_URL}\n")
+    assert len(errors) == 1 and "heredoc 'EOF' non terminé" in errors[0]
+
+
+def test_bom_ne_masque_pas_from(tmp_path):
+    content = "\ufeffFROM cgr.dev/chainguard/python:latest-dev AS mutable\n"
+    assert dockerfile_errors(tmp_path, content) == [
+        "image non épinglée par digest : cgr.dev/chainguard/python:latest-dev"
+    ]
 
 
 def test_from_masque_par_commentaire_detecte(tmp_path):
@@ -131,6 +163,12 @@ def test_mutation_politique_detectee(tmp_path, name):
     path = tmp_path / ".hadolint.yaml"
     path.write_text(text)
     assert policy.check_config(path)
+
+
+def test_alerte_en_double_refusee_sans_hadolint(tmp_path, monkeypatch):
+    finding = {"code": "DL3000", "level": "error", "line": 2, "message": "m"}
+    monkeypatch.setattr(policy, "hadolint", lambda config, path: (1, [finding] * 2))
+    assert policy.check_case(ROOT / ".hadolint.yaml", tmp_path, "double", "", "DL3000")
 
 
 @pytest.mark.skipif(shutil.which("hadolint") is None, reason="Hadolint absent")
