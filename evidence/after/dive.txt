@@ -1,17 +1,17 @@
-# date: 2026-10-08T13:13:14Z
-# image: flask-api:local sha256:21609806331b30327a113e7b0201eb81e547380af587d1fd35a33314c1fc6589
-# cmd: dive --ci --lowestEfficiency=0.8 --highestWastedBytes=disabled --highestUserWastedPercent=disabled flask-api:local
+# date: 2026-10-26T10:15:34Z
+# image: flask-api:local sha256:9eecfae5380a44074aec6c0679dc24859e253ef38c9219422012c87a5c1c4ba0
+# cmd: dive --ci --ci-config .dive-ci flask-api:local (commande de la CI)
 # exit: 0
-  Using default CI config
+  Using CI config: .dive-ci
 Image Source: docker://flask-api:local
 Extracting image from docker-engine... (this can take a while for large images)
 Analyzing image...
-  efficiency: 99.7266 %
-  wastedBytes: 237208 bytes (237 kB)
-  userWastedPercent: 0.4754 %
+  efficiency: 99.7229 %
+  wastedBytes: 250844 bytes (251 kB)
+  userWastedPercent: 0.4962 %
 Inefficient Files:
 Count  Wasted Space  File Path
-   11        237 kB  /usr/lib/apk/db/installed
+   11        251 kB  /usr/lib/apk/db/installed
     2           0 B  /run/lock
     2           0 B  /var/lib/news
     2           0 B  /usr/share/tabset
@@ -21,13 +21,13 @@ Count  Wasted Space  File Path
     2           0 B  /usr/local/lib
     2           0 B  /etc/profile.d
     2           0 B  /etc/ld.so.conf.d
-    3           0 B  /usr/lib/python3.14/zoneinfo/__pycache__
+    3           0 B  /usr/lib/python3.15/zoneinfo/__pycache__
     2           0 B  /etc/apk/keys
     2           0 B  /var/mail
     2           0 B  /home/nonroot
 Results:
-  SKIP: highestUserWastedPercent: rule disabled
+  PASS: highestUserWastedPercent
   SKIP: highestWastedBytes: rule disabled
   PASS: lowestEfficiency
-Result:PASS [Total:3] [Passed:1] [Failed:0] [Warn:0] [Skipped:2]
+Result:PASS [Total:3] [Passed:2] [Failed:0] [Warn:0] [Skipped:1]
 

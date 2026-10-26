@@ -1,13 +1,12 @@
-# date: 2026-10-08T13:14:20Z
+# date: 2026-10-26T10:15:15Z
 # cmd: trivy fs --scanners vuln requirements.txt
 # Version: 0.75.0
 # Vulnerability DB:
 #   Version: 2
-#   UpdatedAt: 2026-10-07 07:38:55.515026687 +0000 UTC
-#   NextUpdate: 2026-10-08 07:38:55.515026457 +0000 UTC
-#   DownloadedAt: 2026-10-08 12:52:32.067670792 +0000 UTC
+#   UpdatedAt: 2026-10-26 07:15:18.945937093 +0000 UTC
+#   NextUpdate: 2026-10-27 07:15:18.945936953 +0000 UTC
+#   DownloadedAt: 2026-10-26 10:10:37.442175 +0000 UTC
 # exit: 0
-
 
 Report Summary
 
