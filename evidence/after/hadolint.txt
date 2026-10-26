@@ -1,4 +1,4 @@
-# date: 2026-10-26T10:22:49Z
+# date: 2026-10-26T10:23:53Z
 # Haskell Dockerfile Linter 2.15.1
 # cmd: hadolint --config .hadolint.yaml Dockerfile
 exit: 0
@@ -145,17 +145,19 @@ hadolint exit: 0
 ::error::tag-version: image non épinglée par digest : cgr.dev/chainguard/python:3.14
 check_pinning exit: 1
 ## add-url
-    FROM cgr.dev/chainguard/python@sha256:b6248c85ba9b97e1e61b30197f309cc4d21661f889fefa5268f0a7bc530dad46
+    cgr.dev/chainguard/python@sha256:49fd266eb8a1331194c318b742087c7a2939cc5794fa64f17feb9e17e12703e2
     ADD https://example.com/app.tar.gz /app/
     USER 65532
-hadolint exit: 0
+add-url:1:1 unexpected 'c' expecting '#', ADD, ARG, CMD, COPY, ENTRYPOINT, ENV, EXPOSE, FROM, HEALTHCHECK, LABEL, MAINTAINER, ONBUILD, RUN, SHELL, STOPSIGNAL, USER, VOLUME, WORKDIR, a pragma, end of input, or whitespaces 
+hadolint exit: 1
 1 violation(s) de pinning ou de durcissement.
 ::error::add-url: ADD interdit, utiliser COPY : ADD https://example.com/app.tar.gz /app/
 check_pinning exit: 1
 ## sans-user
-    FROM cgr.dev/chainguard/python@sha256:b6248c85ba9b97e1e61b30197f309cc4d21661f889fefa5268f0a7bc530dad46
+    cgr.dev/chainguard/python@sha256:49fd266eb8a1331194c318b742087c7a2939cc5794fa64f17feb9e17e12703e2
     RUN ["true"]
-hadolint exit: 0
+sans-user:1:1 unexpected 'c' expecting '#', ADD, ARG, CMD, COPY, ENTRYPOINT, ENV, EXPOSE, FROM, HEALTHCHECK, LABEL, MAINTAINER, ONBUILD, RUN, SHELL, STOPSIGNAL, USER, VOLUME, WORKDIR, a pragma, end of input, or whitespaces 
+hadolint exit: 1
 # -> USER : vérifié par inspection de l'image (65532:65532, evidence/after/image.txt)
 ## hors-registre
     FROM python:3.10-slim
