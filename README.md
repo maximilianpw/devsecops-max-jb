@@ -189,7 +189,7 @@ contre une future exception trop large. Test sur une copie du dépôt avec
 ### Limites connues
 
 - Le Python de l'image de base embarque le module `ensurepip` et un wheel
-  `pip-26.2.1`. Sans shell, ils ne peuvent pas être retirés de l'image finale.
+  `pip-26.2.2`. Sans shell, ils ne peuvent pas être retirés de l'image finale.
   `python -m ensurepip` échoue, car aucun dossier Python n'est accessible en
   écriture.
 - `psycopg2-binary` embarque ses propres bibliothèques natives, non analysées

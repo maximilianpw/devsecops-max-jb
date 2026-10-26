@@ -8,7 +8,7 @@
 # Prérequis : Docker avec Compose v2 et BuildKit, Dive 0.13.1, Trivy 0.75.0,
 # Python 3.15 avec requirements-dev.txt (variable PYTHON, défaut python3).
 # Les fichiers flake8.txt et hadolint.txt ne dépendent pas de l'image et ne
-# sont pas régénérés ici (hadolint.txt : scripts/evidence/hadolint.sh).
+# sont pas régénérés ici.
 #
 # Garanties :
 # - le dépôt n'est pas modifié hors de evidence/after/ : le secret de la base
@@ -43,11 +43,15 @@ PROJECTS=""
 FAILURES=""
 
 cleanup() {
-  local rc=$? project
+  local rc=$? project left
   trap - EXIT INT TERM
   for project in $PROJECTS; do
     COMPOSE_PROJECT_NAME=$project docker compose --env-file /dev/null \
-      -f docker-compose.yml -f "$OVERRIDE" down --volumes --remove-orphans >/dev/null 2>&1 || true
+      -f docker-compose.yml -f "$OVERRIDE" down --volumes --remove-orphans >/dev/null 2>&1 \
+      || FAILURES="$FAILURES\n- nettoyage : docker compose down a échoué ($project)"
+    left=$(residues "$project")
+    [ "$left" = "0 0 0" ] \
+      || FAILURES="$FAILURES\n- nettoyage : ressources restantes pour $project (conteneurs volumes réseaux : $left)"
   done
   docker rm -f "$RUN_CONTAINER" >/dev/null 2>&1 || true
   docker image rm "$CACHE_IMAGE" >/dev/null 2>&1 || true
@@ -57,6 +61,13 @@ cleanup() {
     [ "$rc" -eq 0 ] && rc=1
   fi
   exit "$rc"
+}
+# Ressources Docker restantes d'un projet Compose : « conteneurs volumes réseaux ».
+residues() {
+  local filter="label=com.docker.compose.project=$1"
+  echo "$(docker ps -aq --filter "$filter" | wc -l | tr -d ' ')" \
+    "$(docker volume ls -q --filter "$filter" | wc -l | tr -d ' ')" \
+    "$(docker network ls -q --filter "$filter" | wc -l | tr -d ' ')"
 }
 trap cleanup EXIT
 trap 'exit 130' INT
@@ -188,6 +199,7 @@ gen_trivy() {
     echo "# cmd: trivy image --platform $PLATFORM $IMAGE (toutes sévérités)"
     trivy_header
     run "$TRIVY" image -q --platform "$PLATFORM" "$IMAGE"
+    expect "Trivy API (toutes sévérités)" 0 "$RC"
     echo
     echo "## gate HIGH/CRITICAL corrigibles (commande de la CI, sur l'archive docker save)"
     echo "# date: $(now)"
@@ -202,6 +214,7 @@ gen_trivy() {
     echo "# cmd: trivy image --image-src remote --platform $PLATFORM $DB_IMAGE (toutes sévérités)"
     trivy_header
     run "$TRIVY" image -q --image-src remote --platform "$PLATFORM" "$DB_IMAGE"
+    expect "Trivy PostgreSQL (toutes sévérités)" 0 "$RC"
     echo
     echo "## gate HIGH/CRITICAL corrigibles"
     echo "# date: $(now)"
@@ -216,6 +229,7 @@ gen_trivy() {
     echo "# cmd: trivy fs --scanners vuln requirements.txt"
     trivy_header
     run "$TRIVY" fs -q --scanners vuln requirements.txt
+    expect "Trivy requirements.txt (toutes sévérités)" 0 "$RC"
     echo
     echo "## gate HIGH/CRITICAL corrigibles"
     echo "# cmd: trivy fs --scanners vuln --skip-db-update --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --format table requirements.txt"
@@ -299,10 +313,15 @@ print("WHEEL_PKG_DIR", d, sorted(os.listdir(d)) if d and os.path.isdir(d) else "
   expect_failure "ensurepip dans le runtime" "$rc"
 }
 
+# Copie du dépôt (avec .git) sans le répertoire secrets/ de l'utilisateur.
+copy_repo() {
+  mkdir -p "$1"
+  tar -C "$ROOT" --exclude ./secrets -cf - . | tar -C "$1" -xf -
+}
+
 gen_dockerignore() {
   local repo=$WORK/dockerignore-repo
-  cp -R "$ROOT/." "$repo"
-  rm -rf "$repo/secrets"
+  copy_repo "$repo"
   (
     cd "$repo"
     mkdir -p .venv __pycache__ .pytest_cache htmlcov logs
@@ -329,7 +348,7 @@ gen_dockerignore() {
 
 gen_cache() {
   local repo=$WORK/cache-repo ref copy_id
-  cp -R "$ROOT/." "$repo"
+  copy_repo "$repo"
   ref=$(image_id)
   docker buildx build --platform "$PLATFORM" --provenance=false --sbom=false \
     --load -t "$CACHE_IMAGE" "$repo" >/dev/null 2>&1
@@ -368,7 +387,7 @@ compose() { docker compose --env-file /dev/null "$@"; }
 compose_log() {
   local rc=0
   compose "$@" > "$WORK/compose.out" 2>&1 || rc=$?
-  grep -v 'does not match the detected host platform' "$WORK/compose.out" || true
+  grep -v 'does not match the detected host platform' "$WORK/compose.out" | sed "s#$WORK#<tmp>#g" || true
   return "$rc"
 }
 pkg_list='import importlib.metadata as m; [print(d.metadata["Name"] + "==" + d.version) for d in sorted(m.distributions(), key=lambda d: d.metadata["Name"])]'
@@ -415,7 +434,7 @@ gen_functional() {
 }
 
 gen_hardening() {
-  local id api db rc running secret_value proc
+  local id api db rc running secret_value proc containers volumes networks
   id=$(image_id)
   compose_env hardening-check
   rm -f "$SECRET"
@@ -446,7 +465,7 @@ gen_hardening() {
     rc=0
     DB_PASSWORD=$(openssl rand -hex 24) COMPOSE_FILE='' compose -f "$WORK/compose-envsecret.yml" \
       --project-directory "$ROOT" up -d --no-build > "$WORK/s2.out" 2>&1 || rc=$?
-    grep -v -E 'does not match the detected host platform|Network|Volume|Creat' "$WORK/s2.out" || true
+    grep -v -E 'does not match the detected host platform|Network|Volume|Creat' "$WORK/s2.out" | sed "s#$WORK#<tmp>#g" || true
     echo "# exit: $rc"
     expect_failure "durcissement : secret environment sur service read_only" "$rc"
     DB_PASSWORD=x COMPOSE_FILE='' compose -f "$WORK/compose-envsecret.yml" --project-directory "$ROOT" \
@@ -554,10 +573,16 @@ except OSError as e:
     rc=0; compose_log down > "$WORK/down.out" || rc=$?
     grep Removed "$WORK/down.out" || true
     echo "# exit: $rc"
+    expect "persistance : arrêt de la stack" 0 "$rc"
+    expect "persistance : conteneurs supprimés, volume conservé" "0 1" \
+      "$(residues "$COMPOSE_PROJECT_NAME" | cut -d' ' -f1-2)"
     echo "# cmd: docker compose --env-file /dev/null up -d --no-build --wait --wait-timeout 180"
     rc=0; compose_log up -d --no-build --wait --wait-timeout 180 > "$WORK/up.out" || rc=$?
     grep Healthy "$WORK/up.out" || true
     echo "# exit: $rc"
+    expect "persistance : redémarrage de la stack" 0 "$rc"
+    echo "# conteneur db recréé : $([ "$(compose ps -q db)" != "$db" ] && echo oui || echo non)"
+    expect "persistance : conteneur db recréé" oui "$([ "$(compose ps -q db)" != "$db" ] && echo oui || echo non)"
     echo "# cmd: docker compose exec -T db /usr/bin/psql -h /tmp -U ci_user -d ci_db -At -c 'select v from persist'"
     secret_value=$(compose exec -T db /usr/bin/psql -h /tmp -U ci_user -d ci_db -At -c 'select v from persist')
     echo "select v from persist -> $secret_value"
@@ -569,8 +594,11 @@ except OSError as e:
     rc=0; compose_log down --volumes --remove-orphans > "$WORK/clean.out" || rc=$?
     grep Removed "$WORK/clean.out" || true
     echo "# exit: $rc"
+    expect "nettoyage : docker compose down" 0 "$rc"
     rm -f "$SECRET"
-    echo "# résidus : conteneurs=$(docker ps -aq --filter "label=com.docker.compose.project=$COMPOSE_PROJECT_NAME" | wc -l | tr -d ' ') volumes=$(docker volume ls -q --filter "label=com.docker.compose.project=$COMPOSE_PROJECT_NAME" | wc -l | tr -d ' ') secret temporaire=$([ -e "$SECRET" ] && echo présent || echo absent)"
+    read -r containers volumes networks <<< "$(residues "$COMPOSE_PROJECT_NAME")"
+    echo "# résidus : conteneurs=$containers volumes=$volumes réseaux=$networks secret temporaire=$([ -e "$SECRET" ] && echo présent || echo absent)"
+    expect "nettoyage : résidus" "0 0 0" "$containers $volumes $networks"
   } > "$OUT/compose-hardening.txt"
 }
 

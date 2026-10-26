@@ -1,4 +1,4 @@
-# date: 2026-10-26T10:32:29Z
+# date: 2026-10-26T10:42:56Z
 # cmd: trivy image --image-src remote --platform linux/amd64 cgr.dev/chainguard/postgres@sha256:b32c0efe4c15bbc08fcd801f619a7d98d44f3f8eca3ec89efad4941a56e8741c (toutes sévérités)
 # Version: 0.75.0
 # Vulnerability DB:
@@ -22,7 +22,7 @@ Legend:
 # exit: 0
 
 ## gate HIGH/CRITICAL corrigibles
-# date: 2026-10-26T10:32:31Z
+# date: 2026-10-26T10:42:57Z
 # cmd: trivy image --image-src remote --platform linux/amd64 --scanners vuln --skip-db-update --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --format table cgr.dev/chainguard/postgres@sha256:b32c0efe4c15bbc08fcd801f619a7d98d44f3f8eca3ec89efad4941a56e8741c
 
 Report Summary
