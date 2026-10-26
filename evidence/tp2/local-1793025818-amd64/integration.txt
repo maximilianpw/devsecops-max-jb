@@ -1,0 +1,45 @@
+ Image cgr.dev/chainguard/postgres@sha256:b32c0efe4c15bbc08fcd801f619a7d98d44f3f8eca3ec89efad4941a56e8741c Pulling 
+ Image cgr.dev/chainguard/postgres@sha256:b32c0efe4c15bbc08fcd801f619a7d98d44f3f8eca3ec89efad4941a56e8741c Pulled 
+ Network tp2-local-1793025818-1-amd64_frontend Creating 
+ Network tp2-local-1793025818-1-amd64_frontend Created 
+ Network tp2-local-1793025818-1-amd64_backend Creating 
+ Network tp2-local-1793025818-1-amd64_backend Created 
+ Volume tp2-local-1793025818-1-amd64_db-data Creating 
+ Volume tp2-local-1793025818-1-amd64_db-data Created 
+ Container tp2-local-1793025818-1-amd64-db-1 Creating 
+ Container tp2-local-1793025818-1-amd64-db-1 Created 
+ Container tp2-local-1793025818-1-amd64-api-python-1 Creating 
+ Container tp2-local-1793025818-1-amd64-api-python-1 Created 
+ Container tp2-local-1793025818-1-amd64-db-1 Starting 
+ Container tp2-local-1793025818-1-amd64-db-1 Started 
+ Container tp2-local-1793025818-1-amd64-db-1 Waiting 
+ Container tp2-local-1793025818-1-amd64-db-1 Healthy 
+ Container tp2-local-1793025818-1-amd64-api-python-1 Starting 
+ Container tp2-local-1793025818-1-amd64-api-python-1 Started 
+ Container tp2-local-1793025818-1-amd64-db-1 Waiting 
+ Container tp2-local-1793025818-1-amd64-api-python-1 Waiting 
+ Container tp2-local-1793025818-1-amd64-db-1 Healthy 
+ Container tp2-local-1793025818-1-amd64-api-python-1 Healthy 
+============================= test session starts ==============================
+platform darwin -- Python 3.15.1, pytest-9.1.1, pluggy-1.7.0
+rootdir: /Users/jb/git/03_Formation/devsecops-max-jb
+configfile: pytest.ini
+collected 3 items
+
+tests/integration/test_api_http.py ...                                   [100%]
+
+============================== 3 passed in 0.13s ===============================
+ Container tp2-local-1793025818-1-amd64-api-python-1 Stopping 
+ Container tp2-local-1793025818-1-amd64-api-python-1 Stopped 
+ Container tp2-local-1793025818-1-amd64-api-python-1 Removing 
+ Container tp2-local-1793025818-1-amd64-api-python-1 Removed 
+ Container tp2-local-1793025818-1-amd64-db-1 Stopping 
+ Container tp2-local-1793025818-1-amd64-db-1 Stopped 
+ Container tp2-local-1793025818-1-amd64-db-1 Removing 
+ Container tp2-local-1793025818-1-amd64-db-1 Removed 
+ Network tp2-local-1793025818-1-amd64_backend Removing 
+ Volume tp2-local-1793025818-1-amd64_db-data Removing 
+ Network tp2-local-1793025818-1-amd64_frontend Removing 
+ Volume tp2-local-1793025818-1-amd64_db-data Removed 
+ Network tp2-local-1793025818-1-amd64_backend Removed 
+ Network tp2-local-1793025818-1-amd64_frontend Removed 

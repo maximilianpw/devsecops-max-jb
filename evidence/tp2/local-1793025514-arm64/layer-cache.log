@@ -1,0 +1,122 @@
+#0 building with "tp2-local-1793025514-1-arm64-fresh" instance using docker-container driver
+
+#1 [internal] load local bake definitions
+#1 reading docker-bake.hcl 2.20kB / 2.20kB done
+#1 DONE 0.0s
+
+#2 [internal] booting buildkit
+#2 pulling image moby/buildkit:buildx-stable-1
+#2 pulling image moby/buildkit:buildx-stable-1 1.8s done
+#2 creating container buildx_buildkit_tp2-local-1793025514-1-arm64-fresh0
+#2 creating container buildx_buildkit_tp2-local-1793025514-1-arm64-fresh0 0.4s done
+#2 DONE 2.2s
+
+#3 [internal] load build definition from Dockerfile
+#3 transferring dockerfile: 1.95kB done
+#3 DONE 0.0s
+
+#4 resolve image config for docker-image://docker.io/docker/dockerfile:1.27.1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e
+#4 ...
+
+#5 [auth] docker/dockerfile:pull token for registry-1.docker.io
+#5 DONE 0.0s
+
+#4 resolve image config for docker-image://docker.io/docker/dockerfile:1.27.1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e
+#4 DONE 1.3s
+
+#6 docker-image://docker.io/docker/dockerfile:1.27.1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e
+#6 resolve docker.io/docker/dockerfile:1.27.1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e done
+#6 sha256:c3fba84503b044ce5cd182dd0150892f3b0eff1350c4c5d7f5ca2066da594550 0B / 13.13MB 0.2s
+#6 sha256:c3fba84503b044ce5cd182dd0150892f3b0eff1350c4c5d7f5ca2066da594550 2.10MB / 13.13MB 0.3s
+#6 sha256:c3fba84503b044ce5cd182dd0150892f3b0eff1350c4c5d7f5ca2066da594550 8.39MB / 13.13MB 0.5s
+#6 sha256:c3fba84503b044ce5cd182dd0150892f3b0eff1350c4c5d7f5ca2066da594550 13.13MB / 13.13MB 0.6s done
+#6 extracting sha256:c3fba84503b044ce5cd182dd0150892f3b0eff1350c4c5d7f5ca2066da594550 0.1s done
+#6 DONE 0.7s
+
+#7 [internal] load metadata for cgr.dev/chainguard/python@sha256:dde1a2549dd62864f0263dae8e877680837b4e738a7ecc85c671c55c069848ac
+#7 DONE 1.7s
+
+#8 [internal] load metadata for cgr.dev/chainguard/python@sha256:49fd266eb8a1331194c318b742087c7a2939cc5794fa64f17feb9e17e12703e2
+#8 DONE 2.3s
+
+#9 [internal] load .dockerignore
+#9 transferring context: 467B done
+#9 DONE 0.0s
+
+#10 [internal] setting cache mount permissions
+#10 DONE 0.0s
+
+#11 importing cache manifest from local:9144899259973707694
+#11 inferred cache manifest type: application/vnd.oci.image.manifest.v1+json done
+#11 DONE 0.0s
+
+#12 [stage-1 1/4] FROM cgr.dev/chainguard/python@sha256:49fd266eb8a1331194c318b742087c7a2939cc5794fa64f17feb9e17e12703e2
+#12 resolve cgr.dev/chainguard/python@sha256:49fd266eb8a1331194c318b742087c7a2939cc5794fa64f17feb9e17e12703e2 done
+#12 DONE 0.0s
+
+#13 [builder 1/4] FROM cgr.dev/chainguard/python@sha256:dde1a2549dd62864f0263dae8e877680837b4e738a7ecc85c671c55c069848ac
+#13 resolve cgr.dev/chainguard/python@sha256:dde1a2549dd62864f0263dae8e877680837b4e738a7ecc85c671c55c069848ac done
+#13 DONE 0.0s
+
+#14 [internal] load build context
+#14 transferring context: 2.06kB done
+#14 DONE 0.0s
+
+#15 [builder 2/4] WORKDIR /app
+#15 CACHED
+
+#16 [builder 4/4] RUN --mount=type=cache,target=/home/nonroot/.cache/pip,uid=65532,gid=65532,sharing=locked     --mount=type=secret,id=package_token,required=true,uid=65532,gid=65532,mode=0400     python -c "from pathlib import Path; import sys; sys.exit(0 if Path('/run/secrets/package_token').read_bytes() else 'Build secret package_token must not be empty')"     && test -w "/home/nonroot/.cache/pip"     && python -m venv --without-pip /app/venv     && pip --python /app/venv/bin/python install -r /app/requirements.txt
+#16 CACHED
+
+#17 [builder 3/4] COPY requirements.txt /app/requirements.txt
+#17 CACHED
+
+#18 [stage-1 2/4] COPY --from=builder --chown=0:0 /app/venv /app/venv
+#18 CACHED
+
+#19 [stage-1 3/4] COPY app.py /app/app.py
+#19 CACHED
+
+#20 [stage-1 4/4] WORKDIR /app
+#20 sha256:0abf4c22e8633b8d35892e81cfa980139dee4be4cc24c61314863a64b34a75b9 13.73MB / 13.73MB 0.1s done
+#20 extracting sha256:0abf4c22e8633b8d35892e81cfa980139dee4be4cc24c61314863a64b34a75b9 0.1s done
+#20 sha256:d878899917f8614026fff0f034f9bb8538908c28ddb9cba01a20d2f1a4442f48 2.65MB / 2.65MB 0.0s done
+#20 extracting sha256:d878899917f8614026fff0f034f9bb8538908c28ddb9cba01a20d2f1a4442f48 0.0s done
+#20 sha256:1cbbf414c5f427482f2a63eeda88253d8a8befb713d2d7e3635269a0f4dd0a2c 2.50MB / 2.50MB 0.0s done
+#20 extracting sha256:1cbbf414c5f427482f2a63eeda88253d8a8befb713d2d7e3635269a0f4dd0a2c 0.0s done
+#20 sha256:c83efca6e548ea469b708c35fd0eae58630d06c7cf28d5429bb9dbda445ff688 1.24MB / 1.24MB 0.0s done
+#20 extracting sha256:c83efca6e548ea469b708c35fd0eae58630d06c7cf28d5429bb9dbda445ff688 0.0s done
+#20 sha256:64a8056d3ea21496360d7aa4d7576ea91d4d51c50d369a8a93ea8eff3c9a4609 693.09kB / 693.09kB done
+#20 extracting sha256:64a8056d3ea21496360d7aa4d7576ea91d4d51c50d369a8a93ea8eff3c9a4609 0.0s done
+#20 sha256:d4d84380cb216b5767e2812044e86616d50946a8570f24ad20ae9d02ba9657f9 1.80MB / 1.80MB 0.0s done
+#20 extracting sha256:d4d84380cb216b5767e2812044e86616d50946a8570f24ad20ae9d02ba9657f9 done
+#20 sha256:abc4e0160e1cd9dd59d77e83295d320b401c4e5cfe5796217b1b02f6a6a3ff40 938.81kB / 938.81kB done
+#20 extracting sha256:abc4e0160e1cd9dd59d77e83295d320b401c4e5cfe5796217b1b02f6a6a3ff40 0.0s done
+#20 sha256:e166dda7153eb9789d455c7fc2f30b3c45c12ae238a4a825533d569eb9357cf5 372.23kB / 372.23kB done
+#20 extracting sha256:e166dda7153eb9789d455c7fc2f30b3c45c12ae238a4a825533d569eb9357cf5 done
+#20 sha256:af67956939b3e3562a171186ec5092a976f93e41cccf24186c86668843ec8ac0 580.21kB / 580.21kB done
+#20 extracting sha256:af67956939b3e3562a171186ec5092a976f93e41cccf24186c86668843ec8ac0 done
+#20 sha256:4d7af826a9b68639d818589810fff2514a576729947299cd413254abf2da9113 1.95MB / 1.95MB 0.0s done
+#20 extracting sha256:4d7af826a9b68639d818589810fff2514a576729947299cd413254abf2da9113 0.0s done
+#20 sha256:7467aa10d022d4da73438fb593bba89d2ff43a5bddd52eeacefcc88325f2a598 66.30kB / 66.30kB done
+#20 extracting sha256:7467aa10d022d4da73438fb593bba89d2ff43a5bddd52eeacefcc88325f2a598 0.0s done
+#20 sha256:1765b3b502047dae25161041938a2255a12fbc8528a948648e737ecb0ea6c3fb 8.54MB / 8.54MB 0.1s done
+#20 extracting sha256:1765b3b502047dae25161041938a2255a12fbc8528a948648e737ecb0ea6c3fb 0.1s done
+#20 sha256:d4c312ec4ad9664b9a052dc89087bd19ea265e8f3bee83aba614db063fa66f11 930B / 930B done
+#20 extracting sha256:d4c312ec4ad9664b9a052dc89087bd19ea265e8f3bee83aba614db063fa66f11 done
+#20 sha256:4f4fb700ef54461cfa02571ae0db9a0dc1e0cdb5577484a6d75e68dc38e8acc1 32B / 32B done
+#20 extracting sha256:4f4fb700ef54461cfa02571ae0db9a0dc1e0cdb5577484a6d75e68dc38e8acc1 done
+#20 CACHED
+
+#21 exporting to oci image format
+#21 exporting layers done
+#21 exporting manifest sha256:41840faa0136a8f41c6d88648dbc8637929bc98fc645ecb3556c8d7b30ff909c done
+#21 exporting config sha256:6e6eaca5109993091953debfe2c2e2bc17265359e60b8727244b1ab26282a992 done
+#21 sending tarball
+#21 sending tarball 0.3s done
+#21 DONE 0.4s
+
+#22 importing to docker
+#22 DONE 0.0s
+
+View build details: docker-desktop://dashboard/build/tp2-local-1793025514-1-arm64-fresh/tp2-local-1793025514-1-arm64-fresh0/1icm7xdk13mejolpvp2cqux4x
