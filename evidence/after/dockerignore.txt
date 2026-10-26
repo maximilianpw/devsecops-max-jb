@@ -1,4 +1,4 @@
-# date: 2026-10-26T10:31:35Z
+# date: 2026-10-26T10:43:04Z
 # contrôle du .dockerignore : copie du dépôt (avec .git) dans laquelle des fichiers parasites ont été ajoutés, puis build d'un Dockerfile de test qui liste le contexte reçu
 ## contenu du dossier
 .coverage .dive-ci .dockerignore .env .env.example .env.local .flake8 .git .github .gitignore .hadolint.yaml .pytest_cache .venv __pycache__ app.py backup.tar.gz debug.log docker-compose.yml Dockerfile dump.zip evidence htmlcov LICENSE logs notes.md pytest.ini README.md requirements-dev.txt requirements.txt scripts secrets.json server.key test_app.py tests
