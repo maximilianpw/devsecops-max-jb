@@ -1,0 +1,58 @@
+#0 building with "tp2-local-1793025514-1-arm64" instance using docker-container driver
+
+#1 [internal] load local bake definitions
+#1 reading docker-bake.hcl 2.20kB / 2.20kB done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 1.95kB done
+#2 DONE 0.0s
+
+#3 resolve image config for docker-image://docker.io/docker/dockerfile:1.27.1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e
+#3 DONE 0.0s
+
+#4 docker-image://docker.io/docker/dockerfile:1.27.1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e
+#4 resolve docker.io/docker/dockerfile:1.27.1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e done
+#4 CACHED
+
+#5 [internal] load metadata for cgr.dev/chainguard/python@sha256:dde1a2549dd62864f0263dae8e877680837b4e738a7ecc85c671c55c069848ac
+#5 DONE 0.0s
+
+#6 [internal] load .dockerignore
+#6 transferring context: 467B done
+#6 DONE 0.0s
+
+#7 [internal] setting cache mount permissions
+#7 DONE 0.0s
+
+#8 [builder 1/4] FROM cgr.dev/chainguard/python@sha256:dde1a2549dd62864f0263dae8e877680837b4e738a7ecc85c671c55c069848ac
+#8 resolve cgr.dev/chainguard/python@sha256:dde1a2549dd62864f0263dae8e877680837b4e738a7ecc85c671c55c069848ac done
+#8 DONE 0.0s
+
+#9 [internal] load build context
+#9 transferring context: 38B done
+#9 DONE 0.0s
+
+#10 [builder 2/4] WORKDIR /app
+#10 CACHED
+
+#11 [builder 3/4] COPY requirements.txt /app/requirements.txt
+#11 CACHED
+
+#12 [builder 4/4] RUN --mount=type=cache,target=/home/nonroot/.cache/pip,uid=65532,gid=65532,sharing=locked     --mount=type=secret,id=package_token,required=true,uid=65532,gid=65532,mode=0400     python -c "from pathlib import Path; import sys; sys.exit(0 if Path('/run/secrets/package_token').read_bytes() else 'Build secret package_token must not be empty')"     && test -w "/home/nonroot/.cache/pip"     && python -m venv --without-pip /app/venv     && pip --python /app/venv/bin/python install -r /app/requirements.txt
+#12 CACHED
+
+#13 exporting to oci image format
+#13 exporting layers
+#13 exporting layers 0.4s done
+#13 exporting manifest sha256:9f5a9d6e92aa5ec3736df54f34fd802b14ba5c378ff844d7394424bb4f324ed4
+#13 exporting manifest sha256:9f5a9d6e92aa5ec3736df54f34fd802b14ba5c378ff844d7394424bb4f324ed4 done
+#13 exporting config sha256:a8afafdf880610d95baa1803a08632461d98400dc84e89175e47d05b01d15ad8 done
+#13 sending tarball
+#13 sending tarball 2.7s done
+#13 DONE 3.1s
+
+#14 importing to docker
+#14 DONE 0.0s
+
+View build details: docker-desktop://dashboard/build/tp2-local-1793025514-1-arm64/tp2-local-1793025514-1-arm640/c0hue5ztdtuvjd70u44jvt1aw

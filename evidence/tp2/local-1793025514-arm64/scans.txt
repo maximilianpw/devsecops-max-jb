@@ -1,0 +1,108 @@
+{"diff_ids": ["sha256:a35e3c9e0805a3d09ea433f6e053362ff8ce3853b9b02f109a76390600633cd8", "sha256:3a45993e04db84df3623dbfd6091d99e0f4af3ec200d30c7ddd60e9f89d2b228", "sha256:8d06cfa079e100c0ab3f0bbb3960b73b912c36e249471190b7970ab8623a4b56", "sha256:d6775ba4dc2411c6ec08c235cdd4f53b2ef374657731817b10ed8ec041422619", "sha256:1e4ca15c51342bc75bc8d5f746d025490703d84136c762e7dd7576a2c5321ccd", "sha256:6854c1649b6e675456e54521d93645433f199c8927ca863c333e4383d3bbf57a", "sha256:05063bcd0e4ebacb130b0ba99905c5866151b6aae37c5f453ff5ae6d9e27aa0b", "sha256:c863f6ba22b8b5b482412922c98d73fe84ab9bbd931bc573f6f6030b147e4734", "sha256:2c5aae96ba3ae43d520593e0360e203e80c40f1af23bad3df8fc6acb08712f3e", "sha256:7078b6ac1db3f63baed8e9d63a83bce6148d0d5feb5694358f5bf1b7a6814033", "sha256:c6f92795634dfef9bf6353f3403c843b50ebd7bf24b2adfcfbbf43e21056f797", "sha256:d07c100cd35efabc1e149a98152d4b2e95dfcb11ca32957e6904a089346b612c", "sha256:416cb593a25cf79bb399eee75ca03d7f25bbb8f47f6d956f34bc3f331912018c", "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef"], "image_id": "sha256:6e6eaca5109993091953debfe2c2e2bc17265359e60b8727244b1ab26282a992", "platform": "linux/arm64"}
+Loaded image: flask-api:ci-local-1793025514-1-arm64
+Image vérifiée : flask-api:ci-local-1793025514-1-arm64 (sha256:6e6eaca5109993091953debfe2c2e2bc17265359e60b8727244b1ab26282a992, linux/arm64)
+2026-10-26T15:39:50+01:00	INFO	[vuln] Vulnerability scanning is enabled
+2026-10-26T15:39:51+01:00	INFO	[python] Licenses acquired from one or more METADATA files may be subject to additional terms. Use `--debug` flag to see all affected packages.
+2026-10-26T15:39:51+01:00	INFO	Detected OS	family="wolfi" version="20230201"
+2026-10-26T15:39:51+01:00	INFO	[wolfi] Detecting vulnerabilities...	pkg_num=30
+2026-10-26T15:39:51+01:00	INFO	Number of language-specific files	num=1
+2026-10-26T15:39:51+01:00	INFO	[python-pkg] Detecting vulnerabilities...
+
+📣 [34mNotices:[0m
+  - Version 0.76.1 of Trivy is now available, current version is 0.75.0
+
+To suppress version checks, run Trivy scans with the --skip-version-check flag
+
+2026-10-26T15:39:51+01:00	INFO	[vuln] Vulnerability scanning is enabled
+2026-10-26T15:39:51+01:00	INFO	Detected OS	family="wolfi" version="20230201"
+2026-10-26T15:39:51+01:00	INFO	[wolfi] Detecting vulnerabilities...	pkg_num=30
+2026-10-26T15:39:51+01:00	INFO	Number of language-specific files	num=1
+2026-10-26T15:39:51+01:00	INFO	[python-pkg] Detecting vulnerabilities...
+2026-10-26T15:39:51+01:00	INFO	[vuln] Vulnerability scanning is enabled
+2026-10-26T15:39:51+01:00	INFO	Detected OS	family="wolfi" version="20230201"
+2026-10-26T15:39:51+01:00	INFO	[wolfi] Detecting vulnerabilities...	pkg_num=30
+2026-10-26T15:39:51+01:00	INFO	Number of language-specific files	num=1
+2026-10-26T15:39:51+01:00	INFO	[python-pkg] Detecting vulnerabilities...
+
+Report Summary
+
+┌─────────────────────────────────────────────────────────────────────────────────┬────────────┬─────────────────┐
+│                                     Target                                      │    Type    │ Vulnerabilities │
+├─────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ dist/image.tar (wolfi 20230201)                                                 │   wolfi    │        0        │
+├─────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ app/venv/lib/python3.15/site-packages/blinker-1.9.0.dist-info/METADATA          │ python-pkg │        0        │
+├─────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ app/venv/lib/python3.15/site-packages/click-8.5.0.dist-info/METADATA            │ python-pkg │        0        │
+├─────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ app/venv/lib/python3.15/site-packages/flask-3.1.3.dist-info/METADATA            │ python-pkg │        0        │
+├─────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ app/venv/lib/python3.15/site-packages/gunicorn-26.2.0.dist-info/METADATA        │ python-pkg │        0        │
+├─────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ app/venv/lib/python3.15/site-packages/itsdangerous-2.2.0.dist-info/METADATA     │ python-pkg │        0        │
+├─────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ app/venv/lib/python3.15/site-packages/jinja2-3.1.6.dist-info/METADATA           │ python-pkg │        0        │
+├─────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ app/venv/lib/python3.15/site-packages/markupsafe-3.0.4.dist-info/METADATA       │ python-pkg │        0        │
+├─────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ app/venv/lib/python3.15/site-packages/psycopg2_binary-2.9.13.dist-info/METADATA │ python-pkg │        0        │
+├─────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ app/venv/lib/python3.15/site-packages/werkzeug-3.1.9.dist-info/METADATA         │ python-pkg │        0        │
+└─────────────────────────────────────────────────────────────────────────────────┴────────────┴─────────────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+
+2026-10-26T15:39:51+01:00	INFO	[vuln] Vulnerability scanning is enabled
+2026-10-26T15:39:51+01:00	INFO	[python] Licenses acquired from one or more METADATA files may be subject to additional terms. Use `--debug` flag to see all affected packages.
+2026-10-26T15:39:51+01:00	INFO	Number of language-specific files	num=1
+2026-10-26T15:39:51+01:00	INFO	[pip] Detecting vulnerabilities...
+2026-10-26T15:39:51+01:00	INFO	[vuln] Vulnerability scanning is enabled
+2026-10-26T15:39:51+01:00	INFO	[python] Licenses acquired from one or more METADATA files may be subject to additional terms. Use `--debug` flag to see all affected packages.
+2026-10-26T15:39:51+01:00	INFO	Number of language-specific files	num=1
+2026-10-26T15:39:51+01:00	INFO	[pip] Detecting vulnerabilities...
+
+Report Summary
+
+┌──────────────────┬──────┬─────────────────┐
+│      Target      │ Type │ Vulnerabilities │
+├──────────────────┼──────┼─────────────────┤
+│ requirements.txt │ pip  │        0        │
+└──────────────────┴──────┴─────────────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+
+2026-10-26T15:39:51+01:00	INFO	[vuln] Vulnerability scanning is enabled
+2026-10-26T15:39:58+01:00	INFO	Detected OS	family="wolfi" version="20230201"
+2026-10-26T15:39:58+01:00	INFO	[wolfi] Detecting vulnerabilities...	pkg_num=61
+2026-10-26T15:39:58+01:00	INFO	Number of language-specific files	num=0
+
+📣 [34mNotices:[0m
+  - Version 0.76.1 of Trivy is now available, current version is 0.75.0
+
+To suppress version checks, run Trivy scans with the --skip-version-check flag
+
+2026-10-26T15:39:59+01:00	INFO	[vuln] Vulnerability scanning is enabled
+2026-10-26T15:40:00+01:00	INFO	Detected OS	family="wolfi" version="20230201"
+2026-10-26T15:40:00+01:00	INFO	[wolfi] Detecting vulnerabilities...	pkg_num=61
+2026-10-26T15:40:00+01:00	INFO	Number of language-specific files	num=0
+
+Report Summary
+
+┌──────────────────────────────────────────────────────────────────────────────────┬───────┬─────────────────┐
+│                                      Target                                      │ Type  │ Vulnerabilities │
+├──────────────────────────────────────────────────────────────────────────────────┼───────┼─────────────────┤
+│ cgr.dev/chainguard/postgres@sha256:b32c0efe4c15bbc08fcd801f619a7d98d44f3f8eca3e- │ wolfi │        0        │
+│ c89efad4941a56e8741c (wolfi 20230201)                                            │       │                 │
+└──────────────────────────────────────────────────────────────────────────────────┴───────┴─────────────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+
+
+📣 [34mNotices:[0m
+  - Version 0.76.1 of Trivy is now available, current version is 0.75.0
+
+To suppress version checks, run Trivy scans with the --skip-version-check flag
+

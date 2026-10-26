@@ -1,0 +1,4 @@
+image_id=sha256:ab6badd104153278de0f182f22813473c6de34aaa3e62422cba3762749f42dd6
+archive_sha256=b8819c9ee6415cc85566f3e5d89a4d0e9980bbde38dd8ab80add957be4471d83
+platform=linux/amd64
+image=flask-api:ci-local-1793025818-1-amd64

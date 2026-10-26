@@ -1,0 +1,123 @@
+#0 building with "tp2-local-1793025818-1-amd64" instance using docker-container driver
+
+#1 [internal] load local bake definitions
+#1 reading docker-bake.hcl 2.20kB / 2.20kB done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 1.95kB done
+#2 DONE 0.0s
+
+#3 resolve image config for docker-image://docker.io/docker/dockerfile:1.27.1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e
+#3 DONE 0.0s
+
+#4 docker-image://docker.io/docker/dockerfile:1.27.1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e
+#4 resolve docker.io/docker/dockerfile:1.27.1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e done
+#4 CACHED
+
+#5 [internal] load metadata for cgr.dev/chainguard/python@sha256:dde1a2549dd62864f0263dae8e877680837b4e738a7ecc85c671c55c069848ac
+#5 DONE 0.0s
+
+#6 [internal] load metadata for cgr.dev/chainguard/python@sha256:49fd266eb8a1331194c318b742087c7a2939cc5794fa64f17feb9e17e12703e2
+#6 DONE 0.0s
+
+#7 [internal] load .dockerignore
+#7 transferring context: 467B done
+#7 DONE 0.0s
+
+#8 [internal] setting cache mount permissions
+#8 DONE 0.0s
+
+#9 [builder 1/4] FROM cgr.dev/chainguard/python@sha256:dde1a2549dd62864f0263dae8e877680837b4e738a7ecc85c671c55c069848ac
+#9 resolve cgr.dev/chainguard/python@sha256:dde1a2549dd62864f0263dae8e877680837b4e738a7ecc85c671c55c069848ac done
+#9 DONE 0.0s
+
+#10 [stage-1 1/4] FROM cgr.dev/chainguard/python@sha256:49fd266eb8a1331194c318b742087c7a2939cc5794fa64f17feb9e17e12703e2
+#10 resolve cgr.dev/chainguard/python@sha256:49fd266eb8a1331194c318b742087c7a2939cc5794fa64f17feb9e17e12703e2 done
+#10 DONE 0.0s
+
+#11 [internal] load build context
+#11 transferring context: 1.89kB done
+#11 DONE 0.0s
+
+#12 [builder 2/4] WORKDIR /app
+#12 CACHED
+
+#13 [builder 4/4] RUN --mount=type=cache,target=/home/nonroot/.cache/pip,uid=65532,gid=65532,sharing=locked     --mount=type=secret,id=package_token,required=true,uid=65532,gid=65532,mode=0400     python -c "from pathlib import Path; import sys; sys.exit(0 if Path('/run/secrets/package_token').read_bytes() else 'Build secret package_token must not be empty')"     && test -w "/home/nonroot/.cache/pip"     && python -m venv --without-pip /app/venv     && pip --python /app/venv/bin/python install -r /app/requirements.txt
+#13 CACHED
+
+#14 [stage-1 2/4] COPY --from=builder --chown=0:0 /app/venv /app/venv
+#14 CACHED
+
+#15 [stage-1 3/4] COPY app.py /app/app.py
+#15 CACHED
+
+#16 [builder 3/4] COPY requirements.txt /app/requirements.txt
+#16 CACHED
+
+#17 [stage-1 4/4] WORKDIR /app
+#17 CACHED
+
+#18 exporting to oci image format
+#18 exporting layers done
+#18 exporting manifest sha256:c4afe5662f0a61ec7961cfff73caf6ff83ee63c8f1368155bda7f15c85108c7c done
+#18 exporting config sha256:ab6badd104153278de0f182f22813473c6de34aaa3e62422cba3762749f42dd6 done
+#18 sending tarball
+#18 sending tarball 0.3s done
+#18 DONE 0.3s
+
+#19 importing to docker
+#19 DONE 0.0s
+
+#20 exporting cache to client directory
+#20 preparing build cache for export done
+#20 sending cache export
+#20 writing layer sha256:19d47635d9ec0e70a8f862a50560dc7c19706732510af4571c66c0834115fb6b
+#20 writing layer sha256:159b2024ec9701893d50060378cabec27f2c7c6ae8d0c5b208a912d2c8d20f5b 0.1s done
+#20 writing layer sha256:177b3d4b172abe2159d66f7b830bbe757682d0e55422e6b3870be5e55e25f1d0 0.1s done
+#20 writing layer sha256:1350b3f2ef129b0cdb8550376bfca9200cccad579475dbff0108507f19174c6e 0.0s done
+#20 writing layer sha256:1c8cbae9c851bea2f5faea3d636f3e83cface508277c6f8d09fd7352ba351276
+#20 writing layer sha256:1fba26bb17224014ecdd5a896cf152cf1c56b02bd30da8fd2e9254c263b10174
+#20 writing layer sha256:296350b67b02c7d00a71bcd8999d1712cf65a9a0f445cc25ef0f8bc5a1bb71e2
+#20 writing layer sha256:1c8cbae9c851bea2f5faea3d636f3e83cface508277c6f8d09fd7352ba351276 0.2s done
+#20 writing layer sha256:1fba26bb17224014ecdd5a896cf152cf1c56b02bd30da8fd2e9254c263b10174 0.1s done
+#20 writing layer sha256:296350b67b02c7d00a71bcd8999d1712cf65a9a0f445cc25ef0f8bc5a1bb71e2 0.0s done
+#20 writing layer sha256:2aabf7cb476d36fa5334472e47775dc26aeb8bbead1fa6a201d8c9c48285aef0 0.0s done
+#20 writing layer sha256:3a8970143850253fdbde934894a86246d090fea98e6721127e05de20740e96c0 0.0s done
+#20 writing layer sha256:46f890b9303d9f8fcfc7f4ff003c02c796265bd7ae80c7a473d4885a80d7ff9a
+#20 writing layer sha256:4b77722400ca0697e1599903e809010234492cbb58a0a45bf66753963910c195
+#20 writing layer sha256:4f4fb700ef54461cfa02571ae0db9a0dc1e0cdb5577484a6d75e68dc38e8acc1
+#20 writing layer sha256:19d47635d9ec0e70a8f862a50560dc7c19706732510af4571c66c0834115fb6b 0.2s done
+#20 writing layer sha256:46f890b9303d9f8fcfc7f4ff003c02c796265bd7ae80c7a473d4885a80d7ff9a 0.0s done
+#20 writing layer sha256:4b77722400ca0697e1599903e809010234492cbb58a0a45bf66753963910c195 0.0s done
+#20 writing layer sha256:4f4fb700ef54461cfa02571ae0db9a0dc1e0cdb5577484a6d75e68dc38e8acc1 0.0s done
+#20 writing layer sha256:5adfba10e442d142e34bbb89d915a04cba96fbdfef540c2e0d53539d1b8820d2 0.0s done
+#20 writing layer sha256:5febae4700f292815b4355bfb516b201b8c9c0242195007fc6d00ada6814706f 0.0s done
+#20 writing layer sha256:72f154a025dd07360e226be7997e4074d19373a0b0ae64e876f1f2bd3c51b808 0.0s done
+#20 writing layer sha256:7a4877cecca890677d2aeeaaaa4a4659cff0e5b2db98ca578583621e510cc657 0.1s done
+#20 writing layer sha256:7a7fd075ba544ef4f3646c055baba165a0ac063c037bfea6ff4093ba3e5e9c5b 0.1s done
+#20 writing layer sha256:822d6731eda5026a21b128683c6ef987865737100d0dd15df2f14e9bbba87987
+#20 writing layer sha256:ae973bd51d1023d8ba1702b790992cbfb1753eb344b9a4de66659733d9c212ab
+#20 writing layer sha256:b47a3195e5efd3c7fc7809708fa45226d03a8c6602b8770dfe8d188484982985
+#20 writing layer sha256:bfd77f85335618ebb37198ab5bc555b0ef04959a6761d1ecaf20a4f88d46b365 0.1s done
+#20 writing layer sha256:c54a39674e2f40afd9e74a41e1a3be74ea06ebd3ad179b2fc28a7f8c8a36a4a2
+#20 writing layer sha256:ae973bd51d1023d8ba1702b790992cbfb1753eb344b9a4de66659733d9c212ab 0.4s done
+#20 writing layer sha256:c8eef014b11347f58a31057f0d6f842fdd203f73d00b00d25af0769a7cd4b4b1
+#20 writing layer sha256:822d6731eda5026a21b128683c6ef987865737100d0dd15df2f14e9bbba87987 0.4s done
+#20 writing layer sha256:c54a39674e2f40afd9e74a41e1a3be74ea06ebd3ad179b2fc28a7f8c8a36a4a2 0.4s done
+#20 writing layer sha256:c8eef014b11347f58a31057f0d6f842fdd203f73d00b00d25af0769a7cd4b4b1 0.0s done
+#20 writing layer sha256:d5440e017bf7ab8b1ff10a9107d813aa5efbf00f1881c36e8e63d1709e6011d2
+#20 writing layer sha256:d754ad039185fa09a2cfdf41d8486f801accc86e6944592e89530ec3651d0b50
+#20 writing layer sha256:e75c5db1dbc2aa23dbb9f87a81bc98bf3cac0503d12095ac460f1f8b20980dba 0.1s done
+#20 writing layer sha256:eb8590f7839b18657487c5067158acff6083438fa29307e43d4d6e5c38d36024
+#20 writing layer sha256:d754ad039185fa09a2cfdf41d8486f801accc86e6944592e89530ec3651d0b50 0.1s done
+#20 writing layer sha256:f209da4b195a3ca88d2ad0774c609832c0d8a6aac8e2ebb2764de929845f30a1 0.1s done
+#20 writing layer sha256:d5440e017bf7ab8b1ff10a9107d813aa5efbf00f1881c36e8e63d1709e6011d2 0.3s done
+#20 writing layer sha256:eb8590f7839b18657487c5067158acff6083438fa29307e43d4d6e5c38d36024 0.2s done
+#20 writing layer sha256:b47a3195e5efd3c7fc7809708fa45226d03a8c6602b8770dfe8d188484982985 1.4s done
+#20 sending cache export 1.7s done
+#20 writing config sha256:ce77da3044d68fe1fcb56989191e9ece3353dc06737aaed2881f12f152fec721 0.0s done
+#20 writing cache image manifest sha256:25e7c325dabf87cfbc3314a46a96aff5ba4df62e2ace5f86d4becc29f4e6d050 0.0s done
+#20 DONE 1.7s
+
+View build details: docker-desktop://dashboard/build/tp2-local-1793025818-1-amd64/tp2-local-1793025818-1-amd640/89e13o6wy1hwqeikjht5jffng
