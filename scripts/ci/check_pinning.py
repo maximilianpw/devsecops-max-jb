@@ -171,7 +171,26 @@ def heredocs(keyword, args):
         if not HEREDOC_NAME_RE.match(match.group(3)):
             raise ValueError(f"délimiteur de heredoc non supporté : {word}")
         found.append((match.group(2) == "-", unquote(match.group(3))))
+    # BuildKit abandonne les heredocs d'une ligne que son lexer ne sait pas
+    # lire (expansion ${...} non supportée, guillemet non fermé...) : la ligne
+    # d'ouverture doit donc être lexicalement simple.
+    simple = not any(char in args for char in "$`\\") and quotes_balanced(args)
+    if found and not simple:
+        raise ValueError(
+            f"ligne d'ouverture de heredoc non supportée : {keyword} {args}"
+        )
     return found
+
+
+def quotes_balanced(text):
+    """Vrai si les guillemets simples et doubles de `text` sont tous fermés."""
+    quote = None
+    for char in text:
+        if quote and char == quote:
+            quote = None
+        elif not quote and char in "'\"":
+            quote = char
+    return quote is None
 
 
 def split_instruction(logical):

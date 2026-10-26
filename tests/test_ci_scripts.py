@@ -109,6 +109,10 @@ def test_heredoc_n_est_pas_une_instruction(tmp_path, opening, name):
         (f"# anything=x\n# escape=`\n{BASE}\n", "directive de parseur interdite"),
         (f"# syntax=docker/dockerfile:1\n{BASE}\n", "directive de parseur interdite"),
         (f'{BASE}\nCOPY <<"E\\OF" /x\nE\\OF\n', "délimiteur de heredoc non supporté"),
+        (f"{BASE}\nRUN cat <<CMD ${{#v}}\n{ADD_URL}\nCMD\n", "ouverture de heredoc"),
+        (f"{BASE}\nRUN cat <<CMD ${{v^^}}\n{ADD_URL}\nCMD\n", "ouverture de heredoc"),
+        (f"{BASE}\nRUN cat <<CMD 'abc\n{ADD_URL}\nCMD\n", "ouverture de heredoc"),
+        (f"{BASE}\nRUN cat <<CMD $v\n{ADD_URL}\nCMD\n", "ouverture de heredoc"),
     ],
     ids=[
         "double-antislash",
@@ -118,6 +122,10 @@ def test_heredoc_n_est_pas_une_instruction(tmp_path, opening, name):
         "directive-apres-directive-inconnue",
         "directive-syntax",
         "delimiteur-avec-echappement",
+        "heredoc-expansion-longueur",
+        "heredoc-expansion-majuscules",
+        "heredoc-guillemet-non-ferme",
+        "heredoc-variable",
     ],
 )
 def test_syntaxe_ambigue_refusee(tmp_path, content, reason):
