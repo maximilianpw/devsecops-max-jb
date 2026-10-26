@@ -3,14 +3,18 @@
 
 Hadolint ignore sans prévenir une clé ou un code de règle mal orthographié :
 une règle d'équipe peut donc disparaître sans que le lint du Dockerfile échoue.
-Ce script lance Hadolint avec la configuration du dépôt et vérifie que :
+Ce script vérifie que :
 
+- `.hadolint.yaml` respecte un format strict (toute ligne non reconnue, code
+  mal formé ou valeur entre guillemets est refusé) et les invariants de la
+  politique : seuil `style`, `ignored: []`, pragmas désactivés, `cgr.dev`
+  seul registre autorisé, seules des règles forcées en `error` ;
+- les règles forcées en `error` sont exactement celles testées ici ;
 - le Dockerfile du dépôt ne produit aucune alerte ;
-- chaque règle forcée en `error` dans `.hadolint.yaml` est déclenchée en
-  `error` par un Dockerfile volontairement fautif, et fait échouer Hadolint ;
-- chaque règle testée ici est bien déclarée dans `.hadolint.yaml` ;
-- une alerte de niveau `info` (DL3059, hors règles d'équipe) fait échouer
-  Hadolint : le seuil `failure-threshold: info` est effectif ;
+- chaque règle d'équipe, rejouée sur un Dockerfile qui ne viole qu'elle,
+  remonte en `error` et fait échouer Hadolint ;
+- une alerte de niveau `style` (DL3048, hors règles d'équipe) fait échouer
+  Hadolint : le seuil `failure-threshold: style` est effectif ;
 - un commentaire `# hadolint ignore=...` ne neutralise aucune règle.
 
 Usage :
@@ -32,27 +36,27 @@ BASE = (
     "b6248c85ba9b97e1e61b30197f309cc4d21661f889fefa5268f0a7bc530dad46"
 )
 
-# Règle -> Dockerfile qui ne viole que cette règle (et USER non root final).
+# Règle -> Dockerfile qui ne viole que cette règle.
 CASES = {
     # R1 - Images de base
     "DL3006": "FROM cgr.dev/chainguard/python\nUSER 65532\n",
     "DL3007": "FROM cgr.dev/chainguard/python:latest\nUSER 65532\n",
     "DL3026": "FROM quay.io/fedora/python-311:1\nUSER 65532\n",
     # R2 - Exécution sans privilèges
-    "DL3002": f"{BASE}\nUSER root\n",
+    "DL3002": f"{BASE}\nUSER 0\n",
     "DL3004": f"{BASE}\nRUN sudo true\nUSER 65532\n",
     # R3 - Shell robuste
     "DL4006": f"{BASE}\nRUN curl -s https://example.com | python\nUSER 65532\n",
     "SC2086": f"{BASE}\nRUN echo $HOME\nUSER 65532\n",
     "DL3003": f"{BASE}\nRUN cd /tmp && true\nUSER 65532\n",
     "DL4001": (
-        f"{BASE}\nRUN wget -q https://example.com/a\n"
-        "RUN curl -fsSO https://example.com/b\nUSER 65532\n"
+        f"{BASE}\nRUN wget -q https://example.com/a"
+        " && curl -fsSO https://example.com/b\nUSER 65532\n"
     ),
     # R4 - Copie maîtrisée
     "DL3020": f"{BASE}\nADD app.py /app/app.py\nUSER 65532\n",
     "DL3021": f"{BASE}\nCOPY a b /app\nUSER 65532\n",
-    "DL3022": f"{BASE}\nCOPY --from=nope /a /a\nUSER 65532\n",
+    "DL3022": f"{BASE}\nCOPY --from=cgr.dev/nope /a /a\nUSER 65532\n",
     "DL3045": f"{BASE}\nCOPY app.py app.py\nUSER 65532\n",
     "DL3000": f"{BASE}\nWORKDIR app\nUSER 65532\n",
     # R5 - Dépendances Python
@@ -64,28 +68,85 @@ CASES = {
     "DL4004": f'{BASE}\nUSER 65532\nENTRYPOINT ["a"]\nENTRYPOINT ["b"]\n',
 }
 
+# Seuil : DL3048 (clé de label invalide) est de niveau style et doit bloquer.
+STYLE_CASE = f'{BASE}\nLABEL Bad_key="v"\nUSER 65532\n'
+
 # Un pragma d'exclusion ne doit rien neutraliser (disable-ignore-pragma).
 PRAGMA_CASE = f"{BASE}\n# hadolint ignore=DL3020\nADD app.py /app/app.py\nUSER 65532\n"
 
-# Seuil : DL3059 (RUN consécutifs) est de niveau info par défaut et doit bloquer.
-INFO_CASE = f"{BASE}\nRUN true\nRUN true\nUSER 65532\n"
+# Valeurs attendues des clés scalaires et listes de .hadolint.yaml.
+EXPECTED = {
+    "failure-threshold": "style",
+    "ignored": [],
+    "disable-ignore-pragma": "true",
+    "trustedRegistries": ["cgr.dev"],
+}
+CODE_RE = re.compile(r"^(?:DL|SC)\d{4}$")
+TOP_RE = re.compile(r"^([A-Za-z-]+):(?: (\S+))?$")
+SUB_RE = re.compile(r"^  ([A-Za-z-]+):$")
+ITEM_RE = re.compile(r"^( {2}| {4})- (\S+)$")
 
-RULE_RE = re.compile(r"^\s*-\s*((?:DL|SC)\d{4})\b")
 
+def read_config(path):
+    """Lit .hadolint.yaml dans un format strict ; renvoie (config, erreurs).
 
-def error_rules(config):
-    """Codes listés sous `override: error:` (YAML lu ligne à ligne, sans PyYAML)."""
-    rules, section, in_error = set(), None, False
-    for line in Path(config).read_text().splitlines():
+    Format accepté : `clé: valeur`, `clé:` suivie d'éléments `  - valeur`, et
+    `override:` suivie de `  niveau:` puis `    - CODE`. Commentaires permis.
+    """
+    config, errors, key, sub = {}, [], None, None
+    for number, raw in enumerate(Path(path).read_text().splitlines(), 1):
+        line = re.sub(r"\s+#.*$", "", raw).rstrip()
         if not line.strip() or line.lstrip().startswith("#"):
             continue
-        if not line.startswith(" "):
-            section, in_error = line.split(":", 1)[0], False
-        elif section == "override" and re.match(r"^\s+\w+:", line):
-            in_error = line.strip().startswith("error:")
-        elif section == "override" and in_error and (match := RULE_RE.match(line)):
-            rules.add(match.group(1))
-    return rules
+        where = f"{path}:{number}"
+        if match := TOP_RE.match(line):
+            key, value, sub = match.group(1), match.group(2), None
+            if key in config:
+                errors.append(f"{where}: clé {key} dupliquée")
+            config[key] = ([] if value == "[]" else value) if value else None
+        elif (match := SUB_RE.match(line)) and key == "override":
+            sub = match.group(1)
+            config["override"] = config["override"] or {}
+            config["override"].setdefault(sub, [])
+        elif match := ITEM_RE.match(line):
+            nested, item = len(match.group(1)) == 4, match.group(2)
+            if key == "override" and nested and sub:
+                config["override"][sub].append(item)
+            elif key and not nested and key != "override" and config[key] is None:
+                config[key] = [item]
+            elif key and not nested and isinstance(config[key], list):
+                config[key].append(item)
+            else:
+                errors.append(f"{where}: élément hors liste : {raw.strip()}")
+        else:
+            errors.append(f"{where}: ligne non reconnue : {raw.strip()}")
+    return config, errors
+
+
+def check_config(path):
+    """Vérifie les invariants de la politique ; renvoie les erreurs."""
+    config, errors = read_config(path)
+    override = config.pop("override", None) or {}
+    for key in sorted(config.keys() - EXPECTED.keys()):
+        errors.append(f"{path}: clé inattendue : {key}")
+    for key, expected in EXPECTED.items():
+        if config.get(key) != expected:
+            value = config.get(key)
+            errors.append(f"{path}: {key} vaut {value!r}, attendu {expected!r}")
+    for level in sorted(override.keys() - {"error"}):
+        errors.append(f"{path}: override.{level} interdit (règles d'équipe en error)")
+    declared = override.get("error", [])
+    for code in declared:
+        if not CODE_RE.match(code):
+            errors.append(f"{path}: code invalide dans override.error : {code}")
+    for code in sorted({c for c in declared if declared.count(c) > 1}):
+        errors.append(f"{path}: {code} dupliquée dans override.error")
+    declared = set(declared)
+    for code in sorted(declared - CASES.keys()):
+        errors.append(f"{code} forcée en error dans {path} mais non testée")
+    for code in sorted(CASES.keys() - declared):
+        errors.append(f"{code} testée mais absente de override.error ({path})")
+    return errors
 
 
 def hadolint(config, dockerfile):
@@ -104,15 +165,16 @@ def hadolint(config, dockerfile):
 
 
 def check_case(config, workdir, name, content, code, level="error"):
+    """Exige un échec de Hadolint avec pour seule alerte `code` au niveau `level`."""
     path = Path(workdir) / name
     path.write_text(content)
     returncode, findings = hadolint(config, path)
-    levels = {f["level"] for f in findings if f["code"] == code}
+    found = sorted({(f["code"], f["level"]) for f in findings})
     if returncode == 0:
         return [f"{name} : Hadolint n'a pas échoué (attendu : {code} en {level})"]
-    if levels != {level}:
-        found = ", ".join(f"{f['code']}/{f['level']}" for f in findings) or "aucune"
-        return [f"{name} : {code} attendu en {level}, alertes obtenues : {found}"]
+    if found != [(code, level)]:
+        listed = ", ".join(f"{c}/{lv}" for c, lv in found) or "aucune"
+        return [f"{name} : seule {code}/{level} attendue, alertes obtenues : {listed}"]
     return []
 
 
@@ -123,12 +185,7 @@ def main():
     args = parser.parse_args()
     config = Path(args.config).resolve()
 
-    errors = []
-    declared = error_rules(config)
-    for code in sorted(declared - CASES.keys()):
-        errors.append(f"{code} forcée en error dans {args.config} mais non testée")
-    for code in sorted(CASES.keys() - declared):
-        errors.append(f"{code} testée mais absente de override.error ({args.config})")
+    errors = check_config(args.config)
 
     returncode, findings = hadolint(config, args.dockerfile)
     if returncode != 0 or findings:
@@ -145,16 +202,16 @@ def main():
             errors += case_errors
             if not case_errors:
                 print(f"{code}: error, bloquant")
-        errors += check_case(config, workdir, "seuil", INFO_CASE, "DL3059", "info")
+        errors += check_case(config, workdir, "seuil", STYLE_CASE, "DL3048", "style")
         errors += check_case(config, workdir, "pragma", PRAGMA_CASE, "DL3020")
 
     if errors:
         print("\n".join(errors), file=sys.stderr)
         return 1
     print(
-        f"Politique Hadolint OK : {args.dockerfile} sans alerte ; "
-        f"{len(CASES)} règles d'équipe bloquantes en error ; seuil info effectif ; "
-        "pragma ignore sans effet."
+        f"Politique Hadolint OK : configuration conforme ; {args.dockerfile} sans "
+        f"alerte ; {len(CASES)} règles d'équipe bloquantes en error ; seuil style "
+        "effectif ; pragma ignore sans effet."
     )
     return 0
 

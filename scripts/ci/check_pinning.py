@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Vérifie que les références externes sont immuables.
 
-- Dockerfile : chaque image de base FROM est épinglée par digest sha256.
+- Dockerfile : chaque image de base FROM est épinglée par digest sha256 ;
+  aucune instruction ADD (téléchargement ou extraction sans empreinte,
+  que Hadolint DL3020 tolère pour une URL ou une archive).
 - Compose : chaque image externe est épinglée par digest ; PostgreSQL vient de
   Chainguard (cgr.dev/chainguard/postgres). Le service API est exempté car son
   image est celle construite par la CI (API_IMAGE).
@@ -10,6 +12,8 @@
   `env_file` (non contrôlable ici) et ne reçoit le mot de passe que comme
   secret fichier (clé contenant PASSWORD sans suffixe _FILE refusée).
 - Workflows : chaque action externe est référencée par un SHA de commit complet.
+- Dépendances Python (requirements*.txt) : chaque paquet est épinglé à une
+  version exacte (`nom==version`), sans plage ni URL.
 
 Usage :
     docker compose config --no-interpolate --format json \
@@ -26,6 +30,7 @@ from pathlib import Path
 
 DIGEST_RE = re.compile(r"@sha256:[0-9a-f]{64}$")
 ACTION_SHA_RE = re.compile(r"^[^@\s]+@[0-9a-f]{40}$")
+REQUIREMENT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*==[A-Za-z0-9.!+_-]+$")
 DOCKER_ACTION_RE = re.compile(r"^docker://[^@\s]+@sha256:[0-9a-f]{64}$")
 CHAINGUARD_POSTGRES = "cgr.dev/chainguard/postgres"
 API_SERVICE = "api-python"
@@ -57,6 +62,9 @@ def check_dockerfile(path):
         if keyword == "ARG":
             name, _, default = rest.strip().partition("=")
             args[name.strip()] = default.strip().strip("\"'")
+            continue
+        if keyword == "ADD":
+            errors.append(f"{path}: ADD interdit, utiliser COPY : {line}")
             continue
         if keyword != "FROM":
             continue
@@ -158,6 +166,16 @@ def check_workflows(directory):
     return errors
 
 
+def check_requirements(paths):
+    errors = []
+    for path in paths:
+        for number, line in enumerate(Path(path).read_text().splitlines(), 1):
+            line = line.split("#", 1)[0].strip()
+            if line and not REQUIREMENT_RE.match(line):
+                errors.append(f"{path}:{number}: dépendance non épinglée (==) : {line}")
+    return errors
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--dockerfile", default="Dockerfile")
@@ -168,6 +186,11 @@ def main():
         " (- pour stdin)",
     )
     parser.add_argument("--workflows", default=".github/workflows")
+    parser.add_argument(
+        "--requirements",
+        nargs="+",
+        default=["requirements.txt", "requirements-dev.txt"],
+    )
     options = parser.parse_args()
 
     if options.compose_json == "-":
@@ -180,6 +203,7 @@ def main():
         + check_compose(compose)
         + check_hardening(compose)
         + check_workflows(options.workflows)
+        + check_requirements(options.requirements)
     )
     for error in errors:
         print(f"::error::{error}")
@@ -189,7 +213,10 @@ def main():
             file=sys.stderr,
         )
         return 1
-    print("Pinning OK : Dockerfile, Compose et actions sont immuables ; Compose durci.")
+    print(
+        "Pinning OK : Dockerfile, Compose, dépendances Python et actions sont "
+        "immuables ; Compose durci."
+    )
     return 0
 
 
