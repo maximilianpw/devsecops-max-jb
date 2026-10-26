@@ -133,6 +133,35 @@ def test_syntaxe_ambigue_refusee(tmp_path, content, reason):
     assert len(errors) == 1 and reason in errors[0]
 
 
+@pytest.mark.parametrize(
+    "separator",
+    ["\v", "\f", "\r", "\x1e", "\x85", "\u2028", "\u2029"],
+    ids=["vt", "ff", "cr", "us", "nel", "ls", "ps"],
+)
+def test_separateur_de_ligne_non_lf_refuse(tmp_path, separator):
+    content = f"{BASE}\nLABEL a=b{separator}COPY <<EOF /x{separator}\n{ADD_URL}\nEOF\n"
+    errors = dockerfile_errors(tmp_path, content)
+    assert len(errors) == 1 and "non autorisé" in errors[0]
+
+
+@pytest.mark.parametrize("space", ["\u00a0", "\u2003", "\u2009"])
+def test_espace_unicode_apres_continuation_refuse(tmp_path, space):
+    content = f"{BASE}\nLABEL p=a\\{space}\n{ADD_URL}\n"
+    errors = dockerfile_errors(tmp_path, content)
+    assert len(errors) == 1 and "non autorisé" in errors[0]
+
+
+def test_crlf_refuse_meme_lu_en_texte(tmp_path):
+    path = tmp_path / "Dockerfile"
+    path.write_bytes(f"{BASE}\r\nUSER 65532\r\n".encode())
+    errors = [e.split(": ", 1)[1] for e in pinning.check_dockerfile(path)]
+    assert len(errors) == 1 and "U+000D" in errors[0]
+
+
+def test_accents_des_commentaires_acceptes(tmp_path):
+    assert dockerfile_errors(tmp_path, f"# image — publiée le 26\n{BASE}\n") == []
+
+
 def test_heredoc_non_termine_refuse(tmp_path):
     errors = dockerfile_errors(tmp_path, f"{BASE}\nCOPY <<EOF /x\n{ADD_URL}\n")
     assert len(errors) == 1 and "heredoc 'EOF' non terminé" in errors[0]

@@ -100,6 +100,8 @@ cmp non-termine 'FROM scratch\nCOPY <<EOF /x\nADD absent /y\n'
 cmp mot-cle-coupe 'FROM scratch\nA\\\nDD absent /x\n'
 cmp heredoc-nom-vide "FROM scratch\nCOPY <<'' /x\nADD absent /y\n\n"
 echo "# syntaxes ambiguës : check_pinning.py refuse au lieu d'interpréter"
+cmp separateur-vt 'FROM scratch\nLABEL p="a\vCOPY <<EOF /x\v"\nADD absent /x\nLABEL p=\\\nEOF\n'
+cmp espace-insecable-apres-continuation 'FROM scratch\nLABEL p=a\\\xc2\xa0\nADD absent /x\n'
 cmp double-antislash 'FROM scratch\nLABEL p=C:\\\\\nADD absent /x\n'
 # shellcheck disable=SC2016
 cmp heredoc-expansion-non-supportee 'FROM scratch AS u\nRUN cat <<CMD ${#v}\nFROM scratch\nADD absent /x/\nCMD\n'

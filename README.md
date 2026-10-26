@@ -159,7 +159,10 @@ Contraintes vérifiées automatiquement par la CI
   frontend non épinglé), échappement final doublé, délimiteur de heredoc
   autre qu'un nom simple, ligne d'ouverture de heredoc non lexicalement
   simple (`$`, backtick, antislash, guillemet non fermé : BuildKit y
-  abandonne le heredoc), heredoc non terminé. 20 cas sont comparés à
+  abandonne le heredoc), heredoc non terminé, caractère de contrôle ou
+  d'espacement autre que espace, tabulation et LF (CR, tabulation verticale,
+  espace insécable, séparateurs Unicode : Python et BuildKit ne les lisent pas
+  de la même façon). 22 cas sont comparés à
   BuildKit dans [`evidence/after/hadolint.txt`](evidence/after/hadolint.txt) ;
 - chaque ligne de `requirements.txt` et `requirements-dev.txt` est de la
   forme `nom==version` ;
@@ -497,7 +500,7 @@ par [`scripts/evidence/regenerate.sh`](scripts/evidence/regenerate.sh).
 | Contrôle | Commande | Résultat |
 | --- | --- | --- |
 | Flake8 | `flake8 --config=.flake8 app.py test_app.py tests scripts` (flake8 7.4.1, Python 3.15) | 0 violation |
-| Tests unitaires | `pytest -m "not integration"` (pytest 9.1.1, Python 3.15) | 63 passed : 6 pour l'application, 57 pour les contrôles de CI ([`tests/test_ci_scripts.py`](tests/test_ci_scripts.py) : contournements de `check_pinning.py` et mutations de `.hadolint.yaml`) ; dans le job CI sans Hadolint, seule la variante du test des alertes en double qui appelle le vrai binaire est ignorée ; une variante simulée s'y exécute |
+| Tests unitaires | `pytest -m "not integration"` (pytest 9.1.1, Python 3.15) | 75 passed : 6 pour l'application, 69 pour les contrôles de CI ([`tests/test_ci_scripts.py`](tests/test_ci_scripts.py) : contournements de `check_pinning.py` et mutations de `.hadolint.yaml`) ; dans le job CI sans Hadolint, seule la variante du test des alertes en double qui appelle le vrai binaire est ignorée ; une variante simulée s'y exécute |
 | Hadolint | `hadolint --config .hadolint.yaml Dockerfile` (2.15.1) | 0 alerte, y compris au seuil `style` |
 | Politique Hadolint | `scripts/ci/check_hadolint_policy.py` (2.15.1) | configuration conforme ; 19 règles d'équipe bloquantes en `error` ; seuil `style` et refus des pragmas effectifs |
 | Pinning | `scripts/ci/check_pinning.py` | Dockerfile (sans `ADD`), Compose, `requirements*.txt` (`==`) et actions conformes |

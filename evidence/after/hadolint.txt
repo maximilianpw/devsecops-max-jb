@@ -1,4 +1,4 @@
-# date: 2026-10-26T10:45:36Z
+# date: 2026-10-26T10:56:12Z
 # Haskell Dockerfile Linter 2.15.1
 # cmd: hadolint --config .hadolint.yaml Dockerfile
 exit: 0
@@ -274,6 +274,22 @@ buildkit: [2/2] ADD absent /y
 buildkit: erreur "/absent": not found
 check_pinning: ['ADD interdit, utiliser COPY : ADD absent /y']
 # syntaxes ambiguës : check_pinning.py refuse au lieu d'interpréter
+## separateur-vt
+    FROM scratch
+    LABEL p="a^KCOPY <<EOF /x^K"
+    ADD absent /x
+    LABEL p=\
+    EOF
+buildkit: [1/1] ADD absent /x
+buildkit: erreur "/absent": not found
+check_pinning: ['Dockerfile illisible : caractère U+000B non autorisé ligne 2']
+## espace-insecable-apres-continuation
+    FROM scratch
+    LABEL p=a\ 
+    ADD absent /x
+buildkit: [1/1] ADD absent /x
+buildkit: erreur "/absent": not found
+check_pinning: ['Dockerfile illisible : caractère U+00A0 non autorisé ligne 2']
 ## double-antislash
     FROM scratch
     LABEL p=C:\\
