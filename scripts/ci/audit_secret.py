@@ -26,14 +26,40 @@ def contains(data, token):
     return False
 
 
+def publish(token, paths, destination):
+    """Copie les seuls fichiers sans jeton ; une fuite laisse un marqueur."""
+    destination = Path(destination)
+    destination.mkdir(parents=True, exist_ok=True)
+    leaked = []
+    for index, path in enumerate(paths):
+        path = Path(path)
+        target = destination / path.name
+        if contains(path.read_bytes(), token):
+            leaked.append(index + 1)
+            target.unlink(missing_ok=True)
+            Path(f'{target}.withheld').write_text(
+                'Retenu : ce fichier contenait le jeton factice.\n')
+        else:
+            target.write_bytes(path.read_bytes())
+    return leaked
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--publish-to', metavar='DOSSIER',
+                        help='copier dans DOSSIER les seuls fichiers sans jeton')
     parser.add_argument('secret_file')
     parser.add_argument('paths', nargs='+')
     args = parser.parse_args()
     token = Path(args.secret_file).read_bytes().strip()
     if not token:
         raise SystemExit('jeton de contrôle vide')
+    if args.publish_to:
+        leaked = publish(token, args.paths, args.publish_to)
+        if leaked:
+            raise SystemExit(f'fuite détectée, entrées retenues : {leaked}')
+        print('Logs audités publiés sans jeton.')
+        return
     for index, path in enumerate(args.paths):
         if contains(Path(path).read_bytes(), token):
             raise SystemExit(f'fuite détectée dans l’entrée {index + 1} (expurgée)')

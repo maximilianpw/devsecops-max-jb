@@ -68,6 +68,15 @@ def verify(directory, expected):
     return actual
 
 
+def producer_attempt(expected, current):
+    """Tentative du build : entier positif, jamais postérieure au run courant."""
+    if not (expected.isdigit() and current.isdigit()):
+        raise ValueError('tentative de run invalide')
+    if not 1 <= int(expected) <= int(current):
+        raise ValueError('tentative du producteur incohérente avec le run')
+    return expected
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('command', choices=['describe', 'verify'])
@@ -82,7 +91,12 @@ def main():
             'platform': os.environ['EXPECTED_PLATFORM'],
             'commit': os.environ['GITHUB_SHA'],
             'run_id': os.environ['GITHUB_RUN_ID'],
-            'run_attempt': os.environ['GITHUB_RUN_ATTEMPT'],
+            # Tentative du job producteur (output de confiance) : un « Re-run
+            # failed jobs » relance le consommateur sans rebâtir l'artefact.
+            'run_attempt': producer_attempt(
+                os.environ['EXPECTED_RUN_ATTEMPT'],
+                os.environ['GITHUB_RUN_ATTEMPT'],
+            ),
         }
         result = verify(args.path, expected)
     print(json.dumps(result, sort_keys=True))

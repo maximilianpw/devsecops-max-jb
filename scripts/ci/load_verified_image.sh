@@ -2,7 +2,7 @@
 # Valeurs attendues issues des outputs du job producteur ; jamais de l’artefact.
 set -euo pipefail
 dir="${1:?usage: load_verified_image.sh <dossier>}"
-: "${IMAGE:?}" "${EXPECTED_IMAGE_ID:?}" "${EXPECTED_SHA256:?}" "${EXPECTED_PLATFORM:?}"
+: "${IMAGE:?}" "${EXPECTED_IMAGE_ID:?}" "${EXPECTED_SHA256:?}" "${EXPECTED_PLATFORM:?}" "${EXPECTED_RUN_ATTEMPT:?}"
 python3 scripts/ci/image_archive.py verify "$dir"
 docker load --input "$dir/image.tar"
 # Docker 29/containerd expose parfois le digest du manifeste dans .Id.

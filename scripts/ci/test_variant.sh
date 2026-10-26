@@ -10,7 +10,8 @@ compose() { docker compose --env-file /dev/null -f docker-compose.yml -f "$work/
 cleanup() {
   rc=$?
   trap - EXIT
-  if [ "$rc" -ne 0 ]; then compose logs --no-color; fi
+  # Diagnostic best-effort : son échec ne doit empêcher ni down ni le nettoyage.
+  if [ "$rc" -ne 0 ]; then compose logs --no-color || echo 'compose logs indisponible' >&2; fi
   if ! compose down --volumes --remove-orphans; then rc=1; fi
   rm -rf "$work"
   exit "$rc"

@@ -19,6 +19,8 @@ on:
         value: ${{ jobs.variant.outputs.artifact-id }}
       platform:
         value: ${{ jobs.variant.outputs.platform }}
+      run-attempt:
+        value: ${{ jobs.variant.outputs.run-attempt }}
 permissions: {}
 jobs:
   variant:
@@ -30,6 +32,7 @@ jobs:
       image-id: ${{ steps.build.outputs.image_id }}
       archive-sha256: ${{ steps.build.outputs.archive_sha256 }}
       platform: ${{ steps.build.outputs.platform }}
+      run-attempt: ${{ steps.build.outputs.run_attempt }}
       artifact-id: ${{ steps.upload.outputs.artifact-id }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -50,6 +53,7 @@ jobs:
           EXPECTED_PLATFORM: ${{ steps.build.outputs.platform }}
           EXPECTED_IMAGE_ID: ${{ steps.build.outputs.image_id }}
           EXPECTED_SHA256: ${{ steps.build.outputs.archive_sha256 }}
+          EXPECTED_RUN_ATTEMPT: ${{ steps.build.outputs.run_attempt }}
         run: |
           scripts/ci/load_verified_image.sh dist
           scripts/ci/test_variant.sh

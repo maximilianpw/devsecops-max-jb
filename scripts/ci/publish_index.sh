@@ -4,7 +4,22 @@ set -euo pipefail
 : "${REPOSITORY:?}" "${VERSION:?}" "${MINOR:?}" "${MAJOR:?}"
 : "${AMD64_ID:?}" "${ARM64_ID:?}" "${GITHUB_RUN_ID:?}" "${GITHUB_RUN_ATTEMPT:?}"
 work=$(mktemp -d)
-trap 'rm -rf "$work"' EXIT
+index_digest=""
+# Les trois tags sont posés l'un après l'autre : un échec peut laisser un état
+# partiel. Le rapporter (lecture seule) pour la reprise documentée au README § 8.
+report() {
+  rc=$?
+  trap - EXIT
+  if [ "$rc" -ne 0 ]; then
+    echo "Release interrompue ; index candidat : ${index_digest:-non créé}" >&2
+    for tag in "$VERSION" "$MINOR" "$MAJOR"; do
+      echo "  $REPOSITORY:$tag -> $(crane digest "$REPOSITORY:$tag" 2>/dev/null || echo 'absent ou illisible')" >&2
+    done
+  fi
+  rm -rf "$work"
+  exit "$rc"
+}
+trap report EXIT
 # Une panne d’auth/réseau n’est jamais une preuve d’absence.
 if crane digest "$REPOSITORY:$VERSION" > "$work/existing" 2> "$work/error"; then
   echo 'Version déjà publiée : réécriture interdite' >&2; exit 1
@@ -41,4 +56,4 @@ for tag in "$VERSION" "$MINOR" "$MAJOR"; do
   test "$(crane digest "$REPOSITORY:$tag")" = "$index_digest"
 done
 printf 'digest=%s\n' "$index_digest" >> "$GITHUB_OUTPUT"
-echo "Index publié et tags vérifiés ; en cas d’échec, conserver les refs de staging pour diagnostic."
+echo "Index publié et tags vérifiés : $index_digest"

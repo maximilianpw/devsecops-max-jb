@@ -611,7 +611,11 @@ builder `docker-container` dédié :
   archives, après contrôle positif sur un fixture fuyant isolé.
 
 Les contrôles affichent succès ou échec et un numéro d'entrée, jamais le
-jeton. Le fichier jeton est détruit en fin de build.
+jeton. Les logs bruts du build restent dans un répertoire temporaire privé.
+Même après un échec ou une interruption, seuls ceux qui ne contiennent pas le
+jeton sont copiés dans les rapports publiés ; un log fuyant est retenu
+(marqueur `.withheld`) et fait échouer le job. Le fichier jeton est détruit en
+fin de build.
 
 ### Caches et limites
 
@@ -641,13 +645,17 @@ jeton. Le fichier jeton est détruit en fin de build.
   tests HTTP. L'architecture est mesurée **dans** chaque conteneur (`uname`) ;
   l'Image ID exécuté est comparé à celui de l'image construite.
 - Dive et Trivy tournent sur amd64 pour les deux archives : les inspecter ne
-  demande pas de les exécuter. Les seuils TP1 sont conservés : Dive ≥ 80 %,
+  demande pas de les exécuter. Tous les rapports complets sont produits avant
+  les gates, et tous les gates s'exécutent avant que le job échoue : un gate
+  rouge n'en masque aucun autre. Les seuils TP1 sont conservés : Dive ≥ 80 %,
   HIGH/CRITICAL corrigibles bloquants, et PostgreSQL scanné pour la même
   plateforme.
 - Chaque variante produit son archive, son SHA256, son Image ID, sa plateforme,
   son commit et son run ([`image_archive.py`](scripts/ci/image_archive.py)).
   Une archive corrompue, permutée, d'une autre architecture ou d'un autre run
-  est refusée.
+  est refusée. La tentative attendue est celle du job de build (output de
+  confiance) : un « Re-run failed jobs » des scans ou de la release accepte
+  l'artefact de la tentative précédente, jamais une tentative future.
 
 ### Publication sans reconstruction
 
@@ -661,11 +669,30 @@ Sur tag `vX.Y.Z` uniquement, après succès des trois agrégateurs
    contrôle du config digest, de la plateforme et des DiffIDs après `crane pull` ;
 4. index assemblé à partir des **digests** vérifiés, contrôlé (exactement
    amd64 + arm64, sans attestations) ;
-5. tags `X.Y.Z`, `X.Y`, `X` posés sur ce digest d'index, puis vérifiés ; en
-   cas d'échec, rien n'est promu et les refs de staging restent pour
-   diagnostic ;
+5. tags `X.Y.Z`, puis `X.Y`, puis `X` posés sur ce digest d'index, chacun
+   vérifié ;
 6. pull anonyme et smoke test par tag et par digest sur chaque architecture,
    avec le config digest attendu.
+
+**États partiels et reprise.** Un registre ne permet pas de poser plusieurs
+tags de façon atomique. Un échec avant l'étape 5 ne promeut rien : seules des
+refs `staging-<run>-<tentative>-*` existent, conservées pour diagnostic. Un
+échec pendant l'étape 5 peut laisser `X.Y.Z` publié avec `X.Y` et/ou `X`
+encore sur la release précédente. Le job affiche alors le digest de l'index
+candidat et celui des trois tags. Reprise :
+
+- **`X.Y.Z` absent** : relancer le job de release (« Re-run failed jobs »). Il
+  réutilise les mêmes archives validées ; les nouvelles refs de staging sont
+  propres à la tentative.
+- **`X.Y.Z` présent sur l'index candidat de ce run**, alias manquants ou
+  anciens : ne pas relancer le job, qui refuse à raison une version existante.
+  Un mainteneur disposant de `packages: write` vérifie que `vX.Y.Z` est
+  toujours la release stable la plus récente. Il pose ensuite chaque alias
+  manquant sur ce digest (`crane tag ghcr.io/…@<digest> X.Y`) et le vérifie
+  (`crane digest`), puis lance les pulls anonymes de l'étape 6. `X.Y.Z`
+  n'est jamais réécrit.
+- **`X.Y.Z` présent sur un autre digest** : arrêt. Ne rien écraser ;
+  analyser l'origine, puis publier une nouvelle version de correctif.
 
 Le chemin archive → push → index → pull a été validé localement avec un
 registre jetable. Aucune image de test n'a été poussée sur GHCR.

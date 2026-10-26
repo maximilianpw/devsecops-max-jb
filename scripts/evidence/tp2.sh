@@ -31,7 +31,8 @@ for step in $steps; do
       IMAGE=$(sed -n 's/^image=//p' "$GITHUB_OUTPUT")
       EXPECTED_IMAGE_ID=$(sed -n 's/^image_id=//p' "$GITHUB_OUTPUT")
       EXPECTED_SHA256=$(sed -n 's/^archive_sha256=//p' "$GITHUB_OUTPUT")
-      export IMAGE EXPECTED_IMAGE_ID EXPECTED_SHA256
+      EXPECTED_RUN_ATTEMPT=$(sed -n 's/^run_attempt=//p' "$GITHUB_OUTPUT")
+      export IMAGE EXPECTED_IMAGE_ID EXPECTED_SHA256 EXPECTED_RUN_ATTEMPT
       scripts/ci/scan_variant.sh > "$out/scans.txt" 2>&1 ;;
     *) echo 'Étapes TP2 : build, run, scan (outils déjà installés)' >&2; exit 1 ;;
   esac
