@@ -40,7 +40,7 @@ SECRET=$WORK/secrets/db_password
 OVERRIDE=$WORK/compose.override.yml
 printf 'secrets:\n  db_password:\n    file: %s\n' "$SECRET" > "$OVERRIDE"
 PROJECTS=""
-RUN_CREATED=""
+RUN_ID=""
 CACHE_CREATED=""
 FAILURES=""
 
@@ -56,8 +56,9 @@ cleanup() {
       || FAILURES="$FAILURES\n- nettoyage : ressources restantes pour $project (conteneurs volumes réseaux : $left)"
   done
   # Seules les ressources créées par cette exécution sont supprimées.
-  if [ -n "$RUN_CREATED" ]; then
-    docker rm -f "$RUN_CONTAINER" >/dev/null 2>&1 \
+  # Conteneur supprimé par son identifiant, obtenu de sa propre création.
+  if [ -n "$RUN_ID" ]; then
+    docker rm -f "$RUN_ID" >/dev/null 2>&1 \
       || FAILURES="$FAILURES\n- nettoyage : suppression du conteneur $RUN_CONTAINER"
   fi
   if [ -n "$CACHE_CREATED" ]; then
@@ -277,9 +278,8 @@ wait_health() {
 
 gen_run() {
   local path body
-  RUN_CREATED=1
-  docker run -d --name "$RUN_CONTAINER" --platform "$PLATFORM" --read-only --cap-drop ALL \
-    --security-opt no-new-privileges -p 127.0.0.1:5051:5000 "$IMAGE" >/dev/null
+  RUN_ID=$(docker run -d --name "$RUN_CONTAINER" --platform "$PLATFORM" --read-only \
+    --cap-drop ALL --security-opt no-new-privileges -p 127.0.0.1:5051:5000 "$IMAGE")
   wait_health http://127.0.0.1:5051/health
   {
     echo "# date: $(now)"
@@ -292,11 +292,11 @@ gen_run() {
     done
     sleep 1
     echo "## journaux"
-    docker logs "$RUN_CONTAINER" 2>&1 | grep -v '"GET ' | head -6
+    docker logs "$RUN_ID" 2>&1 | grep -v '"GET ' | head -6
   } > "$OUT/image-run.txt"
   expect "image seule : codes HTTP" "health 200 hello 200 dbtest 500" "$(tr '\n' ' ' < "$WORK/run.status" | sed 's/ $//')"
-  docker rm -f "$RUN_CONTAINER" >/dev/null
-  RUN_CREATED=""
+  docker rm -f "$RUN_ID" >/dev/null
+  RUN_ID=""
 }
 
 gen_compat() {
@@ -363,9 +363,9 @@ gen_cache() {
   local repo=$WORK/cache-repo ref copy_id
   copy_repo "$repo"
   ref=$(image_id)
-  CACHE_CREATED=1
   docker buildx build --platform "$PLATFORM" --provenance=false --sbom=false \
     --load -t "$CACHE_IMAGE" "$repo" >/dev/null 2>&1
+  CACHE_CREATED=1
   copy_id=$(docker image inspect --format '{{.Id}}' "$CACHE_IMAGE")
   echo "# modification de test" >> "$repo/app.py"
   {
@@ -584,6 +584,7 @@ except OSError as e:
     echo "# cmd: docker compose exec -T db /usr/bin/psql -h /tmp -U ci_user -d ci_db -c 'create table persist(v int); insert into persist values (42);'"
     run compose exec -T db /usr/bin/psql -h /tmp -U ci_user -d ci_db \
       -c 'create table persist(v int); insert into persist values (42);'
+    expect "persistance : initialisation SQL" 0 "$RC"
     echo "# cmd: docker compose --env-file /dev/null down (sans -v)"
     rc=0; compose_log down > "$WORK/down.out" || rc=$?
     grep Removed "$WORK/down.out" || true
@@ -631,9 +632,13 @@ done
 for step in "${steps[@]}"; do
   case "$step" in
     run) resource="conteneur $RUN_CONTAINER"
-         ! docker container inspect "$RUN_CONTAINER" >/dev/null 2>&1 ;;
+         found=$(docker ps -aq --filter "name=^${RUN_CONTAINER}\$") \
+           || { echo "inventaire Docker en échec ($resource) : abandon." >&2; exit 2; }
+         [ -z "$found" ] ;;
     cache) resource="image $CACHE_IMAGE"
-           ! docker image inspect "$CACHE_IMAGE" >/dev/null 2>&1 ;;
+           found=$(docker images -q "$CACHE_IMAGE") \
+             || { echo "inventaire Docker en échec ($resource) : abandon." >&2; exit 2; }
+           [ -z "$found" ] ;;
     functional|hardening)
       project=$([ "$step" = functional ] && echo functional-check || echo hardening-check)
       resource="projet Compose $project"

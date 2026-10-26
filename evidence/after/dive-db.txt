@@ -1,4 +1,4 @@
-# date: 2026-10-26T10:53:08Z
+# date: 2026-10-26T11:08:54Z
 # image: cgr.dev/chainguard/postgres@sha256:b32c0efe4c15bbc08fcd801f619a7d98d44f3f8eca3ec89efad4941a56e8741c (linux/amd64)
 # cmd: docker save --platform linux/amd64 -o db.tar <image> ; dive --source docker-archive db.tar --json db.json
 size_bytes=361729869
