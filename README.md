@@ -530,7 +530,7 @@ Preuves détaillées de la stack ([`evidence/`](evidence/)) :
 | [`after/app-functional.txt`](evidence/after/app-functional.txt) | endpoints contre PostgreSQL |
 | [`after/compose-hardening.txt`](evidence/after/compose-hardening.txt) | stack Compose durcie : secret absent, healthy, capabilities, lecture seule, isolation réseau, intégration, persistance |
 
-Les fichiers de `after/` qui dépendent de l'image (tous sauf `flake8.txt` et `hadolint.txt`) se régénèrent avec `scripts/evidence/regenerate.sh` (Docker démarré, Dive et Trivy installés, `PYTHON` pointant vers un Python 3.15 avec `requirements-dev.txt`). Le script ne touche pas au répertoire `secrets/` (secret temporaire fourni par un override Compose), nettoie conteneurs, volumes et fichiers temporaires même en cas d'échec ou d'interruption, et sort en erreur si un résultat attendu n'est pas obtenu.
+Les fichiers de `after/` qui dépendent de l'image (tous sauf `flake8.txt` et `hadolint.txt`) se régénèrent avec `scripts/evidence/regenerate.sh` (Docker démarré, Dive et Trivy installés, `PYTHON` pointant vers un Python 3.15 avec `requirements-dev.txt`) ; `hadolint.txt` avec `scripts/evidence/hadolint.sh > evidence/after/hadolint.txt 2>&1`. Le script ne touche pas au répertoire `secrets/` (secret temporaire fourni par un override Compose), nettoie conteneurs, volumes et fichiers temporaires même en cas d'échec ou d'interruption, et sort en erreur si un résultat attendu n'est pas obtenu.
 
 ## Reproduction locale
 

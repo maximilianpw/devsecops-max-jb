@@ -33,7 +33,7 @@ from pathlib import Path
 
 BASE = (
     "FROM cgr.dev/chainguard/python@sha256:"
-    "b6248c85ba9b97e1e61b30197f309cc4d21661f889fefa5268f0a7bc530dad46"
+    "49fd266eb8a1331194c318b742087c7a2939cc5794fa64f17feb9e17e12703e2"
 )
 
 # Règle -> Dockerfile qui ne viole que cette règle.
