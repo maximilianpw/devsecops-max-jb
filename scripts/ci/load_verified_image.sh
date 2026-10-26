@@ -11,8 +11,9 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 docker save --output "$work/loaded.tar" "$IMAGE"
 python3 scripts/ci/image_archive.py describe "$work/loaded.tar" > "$work/loaded.json"
-actual_id=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])' "$work/loaded.json")
-actual_platform="$(docker image inspect --platform "$EXPECTED_PLATFORM" --format '{{.Os}}/{{.Architecture}}' "$IMAGE")"
+# Plateforme lue dans la configuration re-sauvegardée : `docker image inspect
+# --platform` n'existe pas sur le Docker des runners GitHub.
+read -r actual_id actual_platform < <(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d["image_id"], d["platform"])' "$work/loaded.json")
 [ "$actual_id" = "$EXPECTED_IMAGE_ID" ]
 [ "$actual_platform" = "$EXPECTED_PLATFORM" ]
 echo "Image vérifiée : $IMAGE ($actual_id, $actual_platform)"
