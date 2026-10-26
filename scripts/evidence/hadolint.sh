@@ -50,7 +50,7 @@ echo "# limites de Hadolint et contrôle qui les couvre"
 w=$(mktemp -d)
 lim() {
   printf '%b' "$2" > "$w/$1"
-  echo "## $1"; sed 's/^/    /' "$w/$1"
+  echo "## $1"; sed '/./s/^/    /' "$w/$1"
   hadolint --no-color --config .hadolint.yaml "$w/$1" | sed "s#$w/##"; echo "hadolint exit: ${PIPESTATUS[0]}"
 }
 pin() {
@@ -67,7 +67,7 @@ echo "# -> USER : vérifié par inspection de l'image (65532:65532, evidence/aft
 lim hors-registre 'FROM python:3.10-slim\nUSER 65532\n'
 echo
 echo "# dépendances Python : DL3013 accepte une contrainte, check_pinning.py exige =="
-printf 'Flask>=3\n' > "$w/requirements.txt"; echo "## requirements.txt"; sed 's/^/    /' "$w/requirements.txt"
+printf 'Flask>=3\n' > "$w/requirements.txt"; echo "## requirements.txt"; sed '/./s/^/    /' "$w/requirements.txt"
 docker compose config --no-interpolate --format json \
   | "$PY" scripts/ci/check_pinning.py --compose-json - --requirements "$w/requirements.txt" \
   | sed "s#$w/##"
@@ -79,7 +79,7 @@ echo "# BuildKit échoue sur « absent » quand ADD est une instruction réelle 
 w=$(mktemp -d)
 cmp() {
   printf '%b' "$2" > "$w/Dockerfile"
-  echo "## $1"; sed 's/^/    /' "$w/Dockerfile" | cat -t
+  echo "## $1"; sed '/./s/^/    /' "$w/Dockerfile" | cat -t
   docker buildx build --no-cache --progress=plain ${3:+"$3"} -o type=cacheonly "$w" > "$w/log" 2>&1
   grep -E '^#[0-9]+ \[[0-9]' "$w/log" | sed 's/^#[0-9]* /buildkit: /'
   grep -oE 'unterminated heredoc|"/absent[0-9]*": not found' "$w/log" | sort -u | sed 's/^/buildkit: erreur /'
@@ -113,5 +113,17 @@ cmp directive-escape '# escape=`\nFROM scratch\nLABEL n=v`\nADD absent /x\n'
 cmp directive-indentee '  # escape=`\nFROM scratch\nLABEL n=v`\nADD absent /x\n'
 # shellcheck disable=SC2016
 cmp directive-apres-inconnue '# anything=x\n# escape=`\nFROM scratch\nLABEL n=v`\nADD absent /x\n'
+cmp descripteur-unicode 'FROM scratch AS u\nRUN cat ١<<EOF\nFROM scratch\nADD absent /x/\nLABEL p=\\\nEOF\n\nUSER 65532\n'
 cmp bom '\xef\xbb\xbfFROM cgr.dev/chainguard/python:latest-dev AS mutable\n' --call=targets
+rm -rf "$w"
+
+echo "# ONBUILD ARG ne change pas les arguments du build courant"
+w=$(mktemp -d)
+lim onbuild-arg "ARG TAG=latest-dev\nFROM scratch AS builder\nONBUILD ARG TAG=latest-dev@sha256:$(printf '%064d' 0)\nFROM cgr.dev/chainguard/python:\${TAG}\nUSER 65532\n"
+pin onbuild-arg
+cp "$w/onbuild-arg" "$w/Dockerfile"
+docker buildx build --progress=plain -o type=cacheonly "$w" > "$w/log" 2>&1
+rc=$?
+grep -E 'load metadata|FROM cgr.dev' "$w/log"
+echo "buildkit exit: $rc"
 rm -rf "$w"

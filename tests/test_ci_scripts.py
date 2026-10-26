@@ -243,3 +243,24 @@ def test_alerte_en_double_refusee(tmp_path):
     content = f"{BASE}\nWORKDIR foo\nWORKDIR bar\nUSER 65532\n"
     config = ROOT / ".hadolint.yaml"
     assert policy.check_case(config, tmp_path, "double", content, "DL3000")
+
+
+def test_descripteur_unicode_ne_masque_pas_add(tmp_path):
+    content = (
+        "FROM scratch AS u\nRUN cat ١<<EOF\nFROM scratch\n"
+        "ADD payload.tar.gz /x/\nLABEL p=\\\nEOF\n\nUSER 65532\n"
+    )
+    errors = dockerfile_errors(tmp_path, content)
+    assert len(errors) == 1 and errors[0].startswith("ADD interdit")
+
+
+def test_onbuild_arg_ne_modifie_pas_from(tmp_path):
+    digest = "a" * 64
+    content = (
+        "ARG TAG=latest-dev\nFROM scratch AS builder\n"
+        f"ONBUILD ARG TAG=latest-dev@sha256:{digest}\n"
+        "FROM cgr.dev/chainguard/python:${TAG}\nUSER 65532\n"
+    )
+    assert dockerfile_errors(tmp_path, content) == [
+        "image non épinglée par digest : cgr.dev/chainguard/python:latest-dev"
+    ]

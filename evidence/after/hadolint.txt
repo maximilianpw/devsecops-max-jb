@@ -1,4 +1,4 @@
-# date: 2026-10-26T10:56:12Z
+# date: 2026-10-26T11:06:59Z
 # Haskell Dockerfile Linter 2.15.1
 # cmd: hadolint --config .hadolint.yaml Dockerfile
 exit: 0
@@ -218,7 +218,7 @@ check_pinning: ['ADD interdit, utiliser COPY : ADD absent /x']
     COPY <<EOF-X /x
     texte
     EOF-X
-    
+
     ADD absent /y
 buildkit: [1/2] COPY <<EOF-X /x
 buildkit: [2/2] ADD absent /y
@@ -229,7 +229,7 @@ check_pinning: ['ADD interdit, utiliser COPY : ADD absent /y']
     COPY <<123 /x
     ADD texte /y
     123
-    
+
 buildkit: [1/1] COPY <<123 /x
 check_pinning: []
 ## delimiteur-entre-guillemets
@@ -268,7 +268,7 @@ check_pinning: ['ADD interdit, utiliser COPY : ADD absent /x']
     FROM scratch
     COPY <<'' /x
     ADD absent /y
-    
+
 buildkit: [1/2] COPY << /x
 buildkit: [2/2] ADD absent /y
 buildkit: erreur "/absent": not found
@@ -334,8 +334,33 @@ check_pinning: ['Dockerfile illisible : directive de parseur interdite : # escap
 buildkit: [1/1] ADD absent /x
 buildkit: erreur "/absent": not found
 check_pinning: ['Dockerfile illisible : directive de parseur interdite : # anything=x']
+## descripteur-unicode
+    FROM scratch AS u
+    RUN cat ١<<EOF
+    FROM scratch
+    ADD absent /x/
+    LABEL p=\
+    EOF
+
+    USER 65532
+buildkit: erreur "/absent": not found
+check_pinning: ['ADD interdit, utiliser COPY : ADD absent /x/']
 ## bom
     ﻿FROM cgr.dev/chainguard/python:latest-dev AS mutable
 buildkit: TARGET            DESCRIPTION
 buildkit: mutable (default) 
 check_pinning: ['image non épinglée par digest : cgr.dev/chainguard/python:latest-dev']
+# ONBUILD ARG ne change pas les arguments du build courant
+## onbuild-arg
+    ARG TAG=latest-dev
+    FROM scratch AS builder
+    ONBUILD ARG TAG=latest-dev@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    FROM cgr.dev/chainguard/python:${TAG}
+    USER 65532
+hadolint exit: 0
+1 violation(s) de pinning ou de durcissement.
+::error::onbuild-arg: image non épinglée par digest : cgr.dev/chainguard/python:latest-dev
+check_pinning exit: 1
+#2 [internal] load metadata for cgr.dev/chainguard/python:latest-dev
+#4 [stage-1 1/1] FROM cgr.dev/chainguard/python:latest-dev@sha256:894aed3297d91283e1fc4c542f5374a4b5f3726134fda7c94eaa539342be1e05
+buildkit exit: 0
