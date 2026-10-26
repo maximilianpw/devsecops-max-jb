@@ -1,5 +1,5 @@
-# cgr.dev/chainguard/python:latest-dev — Python 3.14.8, publiée le 2026-10-08
-FROM cgr.dev/chainguard/python@sha256:894aed3297d91283e1fc4c542f5374a4b5f3726134fda7c94eaa539342be1e05 AS builder
+# cgr.dev/chainguard/python:latest-dev — Python 3.15.0, publiée le 2026-10-25
+FROM cgr.dev/chainguard/python@sha256:dde1a2549dd62864f0263dae8e877680837b4e738a7ecc85c671c55c069848ac AS builder
 
 WORKDIR /app
 
@@ -10,8 +10,8 @@ COPY requirements.txt /app/requirements.txt
 RUN python -m venv --without-pip /app/venv \
     && pip --python /app/venv/bin/python install --no-cache-dir -r /app/requirements.txt
 
-# cgr.dev/chainguard/python:latest — Python 3.14.8, publiée le 2026-10-08
-FROM cgr.dev/chainguard/python@sha256:b6248c85ba9b97e1e61b30197f309cc4d21661f889fefa5268f0a7bc530dad46
+# cgr.dev/chainguard/python:latest — Python 3.15.0, publiée le 2026-10-25
+FROM cgr.dev/chainguard/python@sha256:49fd266eb8a1331194c318b742087c7a2939cc5794fa64f17feb9e17e12703e2
 
 ENV PATH="/app/venv/bin:${PATH}" \
     PYTHONDONTWRITEBYTECODE=1 \

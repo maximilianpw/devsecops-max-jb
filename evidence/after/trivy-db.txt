@@ -1,42 +1,40 @@
-# date: 2026-10-08T13:14:20Z
-# cmd: trivy image --image-src remote --platform linux/amd64 cgr.dev/chainguard/postgres@sha256:0c4eaf6cb9bd65337d834f5ebfe79add4312ee2125ab584bf1fbc071abc6bb8f (toutes sévérités)
+# date: 2026-10-26T11:08:55Z
+# cmd: trivy image --image-src remote --platform linux/amd64 cgr.dev/chainguard/postgres@sha256:b32c0efe4c15bbc08fcd801f619a7d98d44f3f8eca3ec89efad4941a56e8741c (toutes sévérités)
 # Version: 0.75.0
 # Vulnerability DB:
 #   Version: 2
-#   UpdatedAt: 2026-10-07 07:38:55.515026687 +0000 UTC
-#   NextUpdate: 2026-10-08 07:38:55.515026457 +0000 UTC
-#   DownloadedAt: 2026-10-08 12:52:32.067670792 +0000 UTC
-# exit: 0
-
+#   UpdatedAt: 2026-10-26 07:15:18.945937093 +0000 UTC
+#   NextUpdate: 2026-10-27 07:15:18.945936953 +0000 UTC
+#   DownloadedAt: 2026-10-26 10:10:37.442175 +0000 UTC
 
 Report Summary
 
 ┌──────────────────────────────────────────────────────────────────────────────────┬───────┬─────────────────┬─────────┐
 │                                      Target                                      │ Type  │ Vulnerabilities │ Secrets │
 ├──────────────────────────────────────────────────────────────────────────────────┼───────┼─────────────────┼─────────┤
-│ cgr.dev/chainguard/postgres@sha256:0c4eaf6cb9bd65337d834f5ebfe79add4312ee2125ab- │ wolfi │        0        │    -    │
-│ 584bf1fbc071abc6bb8f (wolfi 20230201)                                            │       │                 │         │
+│ cgr.dev/chainguard/postgres@sha256:b32c0efe4c15bbc08fcd801f619a7d98d44f3f8eca3e- │ wolfi │        0        │    -    │
+│ c89efad4941a56e8741c (wolfi 20230201)                                            │       │                 │         │
 └──────────────────────────────────────────────────────────────────────────────────┴───────┴─────────────────┴─────────┘
 Legend:
 - '-': Not scanned
 - '0': Clean (no security findings detected)
 
-
-## gate HIGH/CRITICAL corrigibles
-# date: 2026-10-08T13:14:22Z
-# cmd: trivy image --image-src remote --platform linux/amd64 --scanners vuln --skip-db-update --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --format table cgr.dev/chainguard/postgres@sha256:0c4eaf6cb9bd65337d834f5ebfe79add4312ee2125ab584bf1fbc071abc6bb8f
 # exit: 0
 
+## gate HIGH/CRITICAL corrigibles
+# date: 2026-10-26T11:08:56Z
+# cmd: trivy image --image-src remote --platform linux/amd64 --scanners vuln --skip-db-update --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --format table cgr.dev/chainguard/postgres@sha256:b32c0efe4c15bbc08fcd801f619a7d98d44f3f8eca3ec89efad4941a56e8741c
 
 Report Summary
 
 ┌──────────────────────────────────────────────────────────────────────────────────┬───────┬─────────────────┐
 │                                      Target                                      │ Type  │ Vulnerabilities │
 ├──────────────────────────────────────────────────────────────────────────────────┼───────┼─────────────────┤
-│ cgr.dev/chainguard/postgres@sha256:0c4eaf6cb9bd65337d834f5ebfe79add4312ee2125ab- │ wolfi │        0        │
-│ 584bf1fbc071abc6bb8f (wolfi 20230201)                                            │       │                 │
+│ cgr.dev/chainguard/postgres@sha256:b32c0efe4c15bbc08fcd801f619a7d98d44f3f8eca3e- │ wolfi │        0        │
+│ c89efad4941a56e8741c (wolfi 20230201)                                            │       │                 │
 └──────────────────────────────────────────────────────────────────────────────────┴───────┴─────────────────┘
 Legend:
 - '-': Not scanned
 - '0': Clean (no security findings detected)
 
+# exit: 0
