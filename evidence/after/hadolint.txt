@@ -1,4 +1,4 @@
-# date: 2026-10-26T10:36:10Z
+# date: 2026-10-26T10:37:13Z
 # Haskell Dockerfile Linter 2.15.1
 # cmd: hadolint --config .hadolint.yaml Dockerfile
 exit: 0
