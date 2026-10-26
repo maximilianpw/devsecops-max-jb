@@ -33,7 +33,8 @@ ACTION_SHA_RE = re.compile(r"^[^@\s]+@[0-9a-f]{40}$")
 REQUIREMENT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*==[A-Za-z0-9.!+_-]+$")
 DIRECTIVE_RE = re.compile(r"^#\s*([A-Za-z]+)\s*=\s*(\S+)\s*$")
 HEREDOC_INSTRUCTIONS = {"RUN", "COPY", "ADD"}
-HEREDOC_RE = re.compile(r"<<(-?)([\"']?)([A-Za-z_][A-Za-z0-9_]*)\2")
+# Comme BuildKit : un mot shell (guillemets conservés) de la forme [fd]<<[-]nom.
+HEREDOC_RE = re.compile(r"^(\d*)<<(-?)([^<]*)$")
 DOCKER_ACTION_RE = re.compile(r"^docker://[^@\s]+@sha256:[0-9a-f]{64}$")
 CHAINGUARD_POSTGRES = "cgr.dev/chainguard/postgres"
 API_SERVICE = "api-python"
@@ -49,14 +50,15 @@ NO_NEW_PRIVILEGES = {
 def instructions(text):
     """Renvoie les instructions (MOT-CLÉ, arguments) selon la syntaxe Dockerfile.
 
-    Comme Docker : les directives d'en-tête (`# escape=`) fixent le caractère
-    de continuation ; une ligne de commentaire est retirée avant de résoudre
-    les continuations (un `\\` final ne la prolonge pas) ; les lignes vides
-    d'une continuation sont ignorées ; le contenu des heredocs (`<<EOF`) n'est
-    pas une instruction ; le mot-clé est séparé par tout blanc ; ONBUILD est
-    déplié.
+    Comme BuildKit : BOM initial ignoré ; directives d'en-tête (`# escape=`) ;
+    une ligne de commentaire est retirée avant de résoudre les continuations
+    (un `\\` final ne la prolonge pas) ; lignes vides d'une continuation
+    ignorées ; mot-clé séparé par tout blanc ; ONBUILD déplié ; heredocs
+    reconnus seulement en forme shell de RUN, COPY et ADD, sur un mot shell
+    entier `[fd]<<[-]nom` (pas entre guillemets), délimiteur complet sans ses
+    guillemets. Lève ValueError sur un heredoc non terminé, comme BuildKit.
     """
-    lines = text.splitlines()
+    lines = text.removeprefix("\ufeff").splitlines()
     escape = "\\"
     for line in lines:
         directive = DIRECTIVE_RE.match(line)
@@ -80,15 +82,80 @@ def instructions(text):
         keyword, args = split_instruction(logical)
         if keyword == "ONBUILD":
             keyword, args = split_instruction(args)
-        if keyword in HEREDOC_INSTRUCTIONS:
-            for strip_tabs, _, delimiter in HEREDOC_RE.findall(args):
-                while index < len(lines):
-                    data = lines[index]
-                    index += 1
-                    if (data.lstrip("\t") if strip_tabs else data) == delimiter:
-                        break
+        for strip_tabs, name in heredocs(keyword, args, escape):
+            while True:
+                if index >= len(lines):
+                    raise ValueError(f"heredoc {name!r} non terminé ({keyword} {args})")
+                data = lines[index]
+                index += 1
+                if (data.lstrip("\t") if strip_tabs else data) == name:
+                    break
         result.append((keyword, args))
     return result
+
+
+def shell_words(line, escape="\\"):
+    """Découpe en mots shell en conservant guillemets et échappements."""
+    words, word, quote, index = [], None, None, 0
+    while index < len(line):
+        char = line[index]
+        if quote:
+            word += char
+            if char == escape and quote == '"' and index + 1 < len(line):
+                index += 1
+                word += line[index]
+            elif char == quote:
+                quote = None
+        elif char.isspace():
+            if word is not None:
+                words.append(word)
+            word = None
+        else:
+            word = (word or "") + char
+            if char == escape and index + 1 < len(line):
+                index += 1
+                word += line[index]
+            elif char in "'\"":
+                quote = char
+        index += 1
+    if word is not None:
+        words.append(word)
+    return words
+
+
+def unquote(word, escape="\\"):
+    """Retire guillemets et échappements d'un mot shell."""
+    result, quote, index = "", None, 0
+    while index < len(word):
+        char = word[index]
+        if char == quote:
+            quote = None
+        elif not quote and char in "'\"":
+            quote = char
+        elif char == escape and quote != "'" and index + 1 < len(word):
+            index += 1
+            result += word[index]
+        else:
+            result += char
+        index += 1
+    return result
+
+
+def heredocs(keyword, args, escape="\\"):
+    """Heredocs ouverts par une instruction : [(retrait des tabulations, nom)]."""
+    if keyword not in HEREDOC_INSTRUCTIONS:
+        return []
+    try:
+        if isinstance(json.loads(args), list):
+            return []
+    except ValueError:
+        pass
+    found = []
+    for word in shell_words(args, escape):
+        match = HEREDOC_RE.match(word)
+        if match and match.group(3):
+            found.append((match.group(2) == "-", unquote(match.group(3), escape)))
+    return found
 
 
 def split_instruction(logical):
@@ -101,7 +168,11 @@ def check_dockerfile(path):
     errors = []
     args = {}
     stages = set()
-    for keyword, rest in instructions(Path(path).read_text()):
+    try:
+        parsed = instructions(Path(path).read_text(encoding="utf-8"))
+    except ValueError as error:
+        return [f"{path}: Dockerfile illisible : {error}"]
+    for keyword, rest in parsed:
         if keyword == "ARG":
             name, _, default = rest.strip().partition("=")
             args[name.strip()] = default.strip().strip("\"'")
