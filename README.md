@@ -645,11 +645,11 @@ fin de build.
   tests HTTP. L'architecture est mesurée **dans** chaque conteneur (`uname`) ;
   l'Image ID exécuté est comparé à celui de l'image construite.
 - Dive et Trivy tournent sur amd64 pour les deux archives : les inspecter ne
-  demande pas de les exécuter. Tous les rapports complets sont produits avant
-  les gates, et tous les gates s'exécutent avant que le job échoue : un gate
-  rouge n'en masque aucun autre. Les seuils TP1 sont conservés : Dive ≥ 80 %,
-  HIGH/CRITICAL corrigibles bloquants, et PostgreSQL scanné pour la même
-  plateforme.
+  demande pas de les exécuter. Tous les rapports complets sont tentés avant
+  les gates, et tous les gates s'exécutent avant que le job échoue : une erreur
+  de rapport ou un gate rouge ne masque pas les contrôles suivants. Les seuils
+  TP1 sont conservés : Dive ≥ 80 %, HIGH/CRITICAL corrigibles bloquants, et
+  PostgreSQL scanné pour la même plateforme.
 - Chaque variante produit son archive, son SHA256, son Image ID, sa plateforme,
   son commit et son run ([`image_archive.py`](scripts/ci/image_archive.py)).
   Une archive corrompue, permutée, d'une autre architecture ou d'un autre run

@@ -12,8 +12,12 @@ cleanup() {
   trap - EXIT
   # Diagnostic best-effort : son échec ne doit empêcher ni down ni le nettoyage.
   if [ "$rc" -ne 0 ]; then compose logs --no-color || echo 'compose logs indisponible' >&2; fi
-  if ! compose down --volumes --remove-orphans; then rc=1; fi
-  rm -rf "$work"
+  if ! compose down --volumes --remove-orphans; then
+    if [ "$rc" -eq 0 ]; then rc=1; fi
+  fi
+  if ! rm -rf "$work"; then
+    if [ "$rc" -eq 0 ]; then rc=1; fi
+  fi
   exit "$rc"
 }
 trap cleanup EXIT

@@ -34,13 +34,14 @@ def publish(token, paths, destination):
     for index, path in enumerate(paths):
         path = Path(path)
         target = destination / path.name
-        if contains(path.read_bytes(), token):
+        data = path.read_bytes()
+        if contains(data, token):
             leaked.append(index + 1)
             target.unlink(missing_ok=True)
             Path(f'{target}.withheld').write_text(
                 'Retenu : ce fichier contenait le jeton factice.\n')
         else:
-            target.write_bytes(path.read_bytes())
+            target.write_bytes(data)
     return leaked
 
 
