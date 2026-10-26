@@ -42,7 +42,7 @@ BLANKS = " \t"
 FORBIDDEN_CATEGORIES = {"Cc", "Zl", "Zp", "Zs", "Cf"}
 HEREDOC_INSTRUCTIONS = {"RUN", "COPY", "ADD"}
 # Comme BuildKit : un mot shell (guillemets conservés) de la forme [fd]<<[-]nom.
-HEREDOC_RE = re.compile(r"^(\d*)<<(-?)([^<]*)$")
+HEREDOC_RE = re.compile(r"^([0-9]*)<<(-?)([^<]*)$")
 DOCKER_ACTION_RE = re.compile(r"^docker://[^@\s]+@sha256:[0-9a-f]{64}$")
 CHAINGUARD_POSTGRES = "cgr.dev/chainguard/postgres"
 API_SERVICE = "api-python"
@@ -62,7 +62,7 @@ def instructions(text):
     avant de résoudre les continuations (un `\\` final ne la prolonge pas) ;
     continuation concaténée sans séparateur (`A\\` puis `DD` donne `ADD`) ;
     lignes vides d'une continuation ignorées ; mot-clé séparé par tout blanc ;
-    ONBUILD déplié ; heredocs reconnus seulement en forme shell de RUN, COPY
+    ONBUILD conservé ; heredocs reconnus seulement en forme shell de RUN, COPY
     et ADD, sur un mot shell entier `[fd]<<[-]nom`, nom vide exclu.
 
     Syntaxes ambiguës refusées (ValueError) plutôt qu'interprétées : directive
@@ -115,7 +115,8 @@ def check_characters(text):
 
 def parse_instruction(logical, lines, index):
     """Instruction logique -> ((MOT-CLÉ, arguments), index après ses heredocs)."""
-    keyword, args = split_instruction(logical)
+    instruction = split_instruction(logical)
+    keyword, args = instruction
     if keyword == "ONBUILD":
         keyword, args = split_instruction(args)
     for strip_tabs, name in heredocs(keyword, args):
@@ -126,7 +127,7 @@ def parse_instruction(logical, lines, index):
             index += 1
             if (data.lstrip("\t") if strip_tabs else data) == name:
                 break
-    return (keyword, args), index
+    return instruction, index
 
 
 def shell_words(line, escape="\\"):
@@ -231,6 +232,14 @@ def check_dockerfile(path):
     except ValueError as error:  # UnicodeDecodeError compris
         return [f"{path}: Dockerfile illisible : {error}"]
     for keyword, rest in parsed:
+        if keyword == "ONBUILD":
+            # Un déclencheur ne modifie pas les ARG ni les étapes du build.
+            trigger, trigger_args = split_instruction(rest)
+            if trigger == "ADD":
+                errors.append(
+                    f"{path}: ADD interdit, utiliser COPY : ONBUILD ADD {trigger_args}"
+                )
+            continue
         if keyword == "ARG":
             name, _, default = rest.strip().partition("=")
             args[name.strip()] = default.strip().strip("\"'")
