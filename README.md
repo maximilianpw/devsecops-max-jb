@@ -677,15 +677,21 @@ registre jetable. Aucune image de test n'a été poussée sur GHCR.
 Docker, Buildx, Compose), logs de build, du cache pip et du cache de couches,
 métadonnées, intégration. Les mesures TP1 de `evidence/after/` sont conservées.
 
-| Contrôle | Local arm64 (natif) | Local amd64 (émulé) | CI GitHub | Release |
+| Contrôle | Local arm64 (natif) | Local amd64 (émulé) | CI amd64 / arm64 (natifs) | Release |
 | --- | --- | --- | --- | --- |
-| Secret absent/vide refusé, aucune fuite | ✅ | ✅ | à vérifier | — |
-| Cache pip réutilisé (18 `Using cached`) | ✅ | ✅ | à vérifier | — |
-| Cache de couches sur builder neuf | ✅ | ✅ | à vérifier | — |
-| Compose + 3 tests HTTP, architecture et Image ID vérifiés | ✅ | ✅ | à vérifier | — |
-| Dive ≥ 80 % | ✅ 99,74 % | ✅ 99,72 % | à vérifier | — |
-| Trivy HIGH/CRITICAL corrigibles (API, deps, PostgreSQL) | ✅ 0 | ✅ 0 | à vérifier | — |
+| Secret absent/vide refusé, aucune fuite | ✅ | ✅ | ✅ / ✅ | — |
+| Cache pip réutilisé (18 `Using cached`, 0 `Downloading`) | ✅ | ✅ | ✅ / ✅ | — |
+| Cache de couches sur builder neuf (6 étapes `CACHED`) | ✅ | ✅ | ✅ / ✅ | — |
+| Compose + 3 tests HTTP, architecture et Image ID vérifiés | ✅ | ✅ | ✅ / ✅ | — |
+| Dive ≥ 80 % | ✅ 99,74 % | ✅ 99,72 % | ✅ 99,72 % / 99,74 % | — |
+| Trivy, toutes sévérités (API, deps, PostgreSQL) | ✅ 0 | ✅ 0 | ✅ 0 / 0 | — |
 | Index amd64 + arm64 publié, pulls anonymes | registre jetable | — | — | à vérifier (non exécutée) |
+
+CI : [run 40343481595](https://github.com/maximilianpw/devsecops-max-jb/actions/runs/40343481595)
+(PR #10, commit `d5989da`, 2026-10-26), Buildx 0.38.0, BuildKit 0.33.1 ;
+les 5 checks requis sont verts, et la publication est sautée hors tag.
+Image IDs testés puis scannés : amd64 `sha256:253721ca…`, arm64
+`sha256:20d11bce…`. Rapports : artefacts `build-reports-*` et `scan-reports-*`.
 
 Preuves locales : `evidence/tp2/local-1793025514-arm64/` et `evidence/tp2/local-1793025818-amd64/`. Environnement : macOS arm64, Docker 29.5.3 (containerd image store),
 Buildx 0.34.1, BuildKit 0.33.1 (builder `docker-container`), le 2026-10-26.
