@@ -1,0 +1,102 @@
+{"diff_ids": ["sha256:c97e0dfac43ad638644d65e5bc90462991359a8db1256f7028317db7f7957ad1", "sha256:81ac36f4bee4102128a3f1f63d1a2a057922351d656f4a4fcdb1b92cd28a95f2", "sha256:bafd512de7a92391365817686a881e8a5c702ca59fcd49d1815b94b0ea499eeb", "sha256:cf2c94266c5671f5c3ff8d0b6ed93ddd4571ed810824b81bd816bac9c20b6e66", "sha256:f2c593b35523baf1def73c55332e45f4737f935c8936738f28b273508ccf946f", "sha256:330346820f8a71a4ef250be6afc025cbefbbc8d22bfc474ce67be4c3978b2fb8", "sha256:052a01cc85452dbcdea2bd29731121b10f4bf37bda2c2e1fd2a922c55f10bd66", "sha256:ec2d331aff3962de50399a68b7c2e8ccb818a24ca04e788b73ff3c592c63cd2b", "sha256:05e96666dfa8e8badae4dc70c1dde7a6e1de7241892fe70da145a711d0615e53", "sha256:281b683a5deb9f04da15a9d2edd26188c5af625abab8f78680befa0fb165734c", "sha256:e3183d5cdd6263326fb29ab6e3635d74865a3aeceba0198800bcf358a4d63c6c", "sha256:37739fca5afeb20c1d076a877721f2bcca4a056153bdfbee8ddc5f3081c6b994", "sha256:020e811039f9bc76fee86e5ff4e658734e69dcb1ad744578c03c630465175f84", "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef"], "image_id": "sha256:ab6badd104153278de0f182f22813473c6de34aaa3e62422cba3762749f42dd6", "platform": "linux/amd64"}
+Loaded image: flask-api:ci-local-1793025818-1-amd64
+Image vérifiée : flask-api:ci-local-1793025818-1-amd64 (sha256:ab6badd104153278de0f182f22813473c6de34aaa3e62422cba3762749f42dd6, linux/amd64)
+2026-10-26T15:44:47+01:00	INFO	[vuln] Vulnerability scanning is enabled
+2026-10-26T15:44:47+01:00	INFO	[python] Licenses acquired from one or more METADATA files may be subject to additional terms. Use `--debug` flag to see all affected packages.
+2026-10-26T15:44:47+01:00	INFO	Detected OS	family="wolfi" version="20230201"
+2026-10-26T15:44:47+01:00	INFO	[wolfi] Detecting vulnerabilities...	pkg_num=30
+2026-10-26T15:44:47+01:00	INFO	Number of language-specific files	num=1
+2026-10-26T15:44:47+01:00	INFO	[python-pkg] Detecting vulnerabilities...
+2026-10-26T15:44:47+01:00	INFO	[vuln] Vulnerability scanning is enabled
+2026-10-26T15:44:47+01:00	INFO	Detected OS	family="wolfi" version="20230201"
+2026-10-26T15:44:47+01:00	INFO	[wolfi] Detecting vulnerabilities...	pkg_num=30
+2026-10-26T15:44:47+01:00	INFO	Number of language-specific files	num=1
+2026-10-26T15:44:47+01:00	INFO	[python-pkg] Detecting vulnerabilities...
+2026-10-26T15:44:47+01:00	INFO	[vuln] Vulnerability scanning is enabled
+2026-10-26T15:44:47+01:00	INFO	Detected OS	family="wolfi" version="20230201"
+2026-10-26T15:44:47+01:00	INFO	[wolfi] Detecting vulnerabilities...	pkg_num=30
+2026-10-26T15:44:47+01:00	INFO	Number of language-specific files	num=1
+2026-10-26T15:44:47+01:00	INFO	[python-pkg] Detecting vulnerabilities...
+
+Report Summary
+
+┌─────────────────────────────────────────────────────────────────────────────────┬────────────┬─────────────────┐
+│                                     Target                                      │    Type    │ Vulnerabilities │
+├─────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ dist/image.tar (wolfi 20230201)                                                 │   wolfi    │        0        │
+├─────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ app/venv/lib/python3.15/site-packages/blinker-1.9.0.dist-info/METADATA          │ python-pkg │        0        │
+├─────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ app/venv/lib/python3.15/site-packages/click-8.5.0.dist-info/METADATA            │ python-pkg │        0        │
+├─────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ app/venv/lib/python3.15/site-packages/flask-3.1.3.dist-info/METADATA            │ python-pkg │        0        │
+├─────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ app/venv/lib/python3.15/site-packages/gunicorn-26.2.0.dist-info/METADATA        │ python-pkg │        0        │
+├─────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ app/venv/lib/python3.15/site-packages/itsdangerous-2.2.0.dist-info/METADATA     │ python-pkg │        0        │
+├─────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ app/venv/lib/python3.15/site-packages/jinja2-3.1.6.dist-info/METADATA           │ python-pkg │        0        │
+├─────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ app/venv/lib/python3.15/site-packages/markupsafe-3.0.4.dist-info/METADATA       │ python-pkg │        0        │
+├─────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ app/venv/lib/python3.15/site-packages/psycopg2_binary-2.9.13.dist-info/METADATA │ python-pkg │        0        │
+├─────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ app/venv/lib/python3.15/site-packages/werkzeug-3.1.9.dist-info/METADATA         │ python-pkg │        0        │
+└─────────────────────────────────────────────────────────────────────────────────┴────────────┴─────────────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+
+2026-10-26T15:44:47+01:00	INFO	[vuln] Vulnerability scanning is enabled
+2026-10-26T15:44:47+01:00	INFO	[python] Licenses acquired from one or more METADATA files may be subject to additional terms. Use `--debug` flag to see all affected packages.
+2026-10-26T15:44:47+01:00	INFO	Number of language-specific files	num=1
+2026-10-26T15:44:47+01:00	INFO	[pip] Detecting vulnerabilities...
+2026-10-26T15:44:47+01:00	INFO	[vuln] Vulnerability scanning is enabled
+2026-10-26T15:44:47+01:00	INFO	[python] Licenses acquired from one or more METADATA files may be subject to additional terms. Use `--debug` flag to see all affected packages.
+2026-10-26T15:44:47+01:00	INFO	Number of language-specific files	num=1
+2026-10-26T15:44:47+01:00	INFO	[pip] Detecting vulnerabilities...
+
+Report Summary
+
+┌──────────────────┬──────┬─────────────────┐
+│      Target      │ Type │ Vulnerabilities │
+├──────────────────┼──────┼─────────────────┤
+│ requirements.txt │ pip  │        0        │
+└──────────────────┴──────┴─────────────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+
+2026-10-26T15:44:47+01:00	INFO	[vuln] Vulnerability scanning is enabled
+2026-10-26T15:44:54+01:00	INFO	Detected OS	family="wolfi" version="20230201"
+2026-10-26T15:44:54+01:00	INFO	[wolfi] Detecting vulnerabilities...	pkg_num=61
+2026-10-26T15:44:54+01:00	INFO	Number of language-specific files	num=0
+
+📣 [34mNotices:[0m
+  - Version 0.76.1 of Trivy is now available, current version is 0.75.0
+
+To suppress version checks, run Trivy scans with the --skip-version-check flag
+
+2026-10-26T15:44:54+01:00	INFO	[vuln] Vulnerability scanning is enabled
+2026-10-26T15:44:56+01:00	INFO	Detected OS	family="wolfi" version="20230201"
+2026-10-26T15:44:56+01:00	INFO	[wolfi] Detecting vulnerabilities...	pkg_num=61
+2026-10-26T15:44:56+01:00	INFO	Number of language-specific files	num=0
+
+Report Summary
+
+┌──────────────────────────────────────────────────────────────────────────────────┬───────┬─────────────────┐
+│                                      Target                                      │ Type  │ Vulnerabilities │
+├──────────────────────────────────────────────────────────────────────────────────┼───────┼─────────────────┤
+│ cgr.dev/chainguard/postgres@sha256:b32c0efe4c15bbc08fcd801f619a7d98d44f3f8eca3e- │ wolfi │        0        │
+│ c89efad4941a56e8741c (wolfi 20230201)                                            │       │                 │
+└──────────────────────────────────────────────────────────────────────────────────┴───────┴─────────────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+
+
+📣 [34mNotices:[0m
+  - Version 0.76.1 of Trivy is now available, current version is 0.75.0
+
+To suppress version checks, run Trivy scans with the --skip-version-check flag
+

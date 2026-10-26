@@ -18,7 +18,9 @@ L'API est servie par gunicorn sur le port 5000 et lit `DB_HOST`, `DB_PORT`,
 > ([run 37784147903](https://github.com/maximilianpw/devsecops-max-jb/actions/runs/37784147903)),
 > après `v1.0.0` ([run 37777799398](https://github.com/maximilianpw/devsecops-max-jb/actions/runs/37777799398)). Les sorties brutes des mesures locales
 > sont dans [`evidence/`](evidence/). Chaque mesure indique sa date, sa
-> commande et la version de l'outil.
+> commande et la version de l'outil. Le TP2 (build Bake, secret BuildKit,
+> amd64 + arm64, index multi-plateforme) est décrit au § 8 ; aucune release
+> multi-architecture n'est encore publiée.
 
 ## 1. Packages GHCR publics
 
@@ -156,8 +158,9 @@ Contraintes vérifiées automatiquement par la CI
   contexte différé de `ONBUILD` conservé,
   heredocs reconnus en forme shell de `RUN`/`COPY`/`ADD` avec leur délimiteur
   complet et un descripteur composé de chiffres ASCII). Toute syntaxe ambiguë est **refusée** plutôt qu'interprétée :
-  directive de parseur (`# escape=`, ou `# syntax=` qui chargerait un
-  frontend non épinglé), échappement final doublé, délimiteur de heredoc
+  directive de parseur (`# escape=`, ou `# syntax=` autre que
+  `docker/dockerfile:1[.x[.y]]@sha256:…` en toute première ligne, seule forme
+  acceptée et exigée en CI par `--require-tp2`), échappement final doublé, délimiteur de heredoc
   autre qu'un nom simple, ligne d'ouverture de heredoc non lexicalement
   simple (`$`, backtick, antislash, guillemet non fermé : BuildKit y
   abandonne le heredoc), heredoc non terminé, caractère de contrôle ou
@@ -342,12 +345,18 @@ lancée seule, sans base, `/dbtest` renvoie le 500 générique.
 Graphe du workflow :
 
 ```text
-Flake8 + tests unitaires ─┐
-                          ├─ BuildKit + Dive ─┬─ Trivy ────────────┐
-Hadolint + pinning ───────┘                   └─ Compose + pytest ─┼─ Release GHCR ─ Pull public + smoke test
-                                                                   │
-                          (release : tags vX.Y.Z uniquement) ──────┘
+Flake8 + tests unitaires ─┐  ┌─ build-amd64 (ubuntu-24.04)     ─ scan-amd64 ─┐   ┌─ BuildKit + Dive ─┐
+                          ├──┤                                               ├───┼─ Trivy ───────────┼─ Publish validated multi-platform index
+Hadolint + pinning ───────┘  └─ build-arm64 (ubuntu-24.04-arm) ─ scan-arm64 ─┘   └─ Compose + pytest ─┘     └─ Anonymous pull and native smoke test
+                                                                       (publication : tags vX.Y.Z uniquement)
 ```
+
+`build-*` = Bake, preuves secret/cache et intégration Compose native ;
+`scan-*` = Dive et Trivy sur l'archive transmise (détails au § 8).
+`BuildKit + Dive`, `Trivy` et `Compose + pytest` sont désormais des jobs
+agrégateurs (`if: always()`) qui n'échouent pas seulement en cas d'erreur :
+ils exigent le succès explicite de chaque producteur des deux architectures.
+Un job sauté, annulé ou absent les fait échouer.
 
 - **Déclencheurs** : push sur `main`, PR vers `main` (`pull_request`, jamais
   `pull_request_target`), tags `vX.Y.Z`. Les PR et les pushes valident sans
@@ -362,7 +371,9 @@ Hadolint + pinning ───────┘                   └─ Compose + p
   épinglé dans le workflow.
 - **Python de la CI** : 3.15, aligné sur l'image runtime.
 - **Ordre des gates** : aucun build ni conteneur avant le succès de Flake8,
-  des tests unitaires, de Hadolint et du pinning.
+  des tests unitaires, de Hadolint et du pinning (`--require-tp2`). Ensuite :
+  build et intégration native par architecture, scans des deux archives,
+  agrégateurs, puis publication sur tag seulement.
 - **Hadolint** : politique d'équipe écrite dans
   [`.hadolint.yaml`](.hadolint.yaml), chaque règle commentée avec sa raison :
 
@@ -372,7 +383,7 @@ Hadolint + pinning ───────┘                   └─ Compose + p
   | R2 Exécution sans privilèges | DL3002, DL3004 |
   | R3 Shell robuste | DL4006, SC2086, DL3003, DL4001 |
   | R4 Copie maîtrisée (`COPY` uniquement) | DL3020, DL3021, DL3022, DL3045, DL3000 |
-  | R5 Dépendances Python versionnées, sans cache pip | DL3013, DL3042 |
+  | R5 Dépendances Python versionnées, cache pip jamais dans une couche | DL3013, DL3042 |
   | R6 Démarrage prévisible (forme JSON, au plus un `CMD` et un `ENTRYPOINT` par étape) | DL3025, DL4003, DL4004 |
 
   Seuil `failure-threshold: style` : toute autre alerte Hadolint, quel que
@@ -405,11 +416,14 @@ Hadolint + pinning ───────┘                   └─ Compose + p
   DL3013 accepte `Flask>=3` et ne lit pas `-r requirements.txt`, d'où
   l'exigence `==` de `check_pinning.py` ; un conteneur sans ligne `USER`
   passe aussi, l'utilisateur est vérifié par inspection de l'image.
-- **Une seule image** : construite une fois (BuildKit, `linux/amd64`, sans
-  attestations), exportée par `docker save`, transmise en artefact. Chaque job
-  consommateur vérifie le SHA256 de l'archive puis l'Image ID avant usage ;
-  le job d'intégration vérifie aussi que le conteneur `api-python` exécute
-  bien cet Image ID. La release retague cette image, sans reconstruction.
+- **Une image par architecture** : chaque variante est construite une fois
+  (Bake `app-ci`, sans attestations), exportée par `docker save` et transmise
+  en artefact. Chaque consommateur vérifie le SHA256 de l'archive, l'Image ID,
+  la plateforme, les DiffIDs et les métadonnées (commit, run, tentative),
+  avec des valeurs attendues issues des outputs du job producteur, jamais de
+  l'artefact. Le job d'intégration vérifie aussi que le conteneur `api-python`
+  exécute bien cet Image ID. La release publie ces archives, sans
+  reconstruction (§ 8).
 - **Dive** ([`.dive-ci`](.dive-ci)) : `lowestEfficiency: 0.8` (exigence),
   `highestUserWastedPercent: 0.1` (défaut Dive rendu explicite),
   `highestWastedBytes: disabled`. Le défaut implicite de Dive pour
@@ -431,11 +445,14 @@ Hadolint + pinning ───────┘                   └─ Compose + p
   - releases sérialisées (`concurrency`) ;
   - refus si le tag n'est pas la release stable la plus récente, pour que les
     alias ne reculent jamais ;
-  - refus si `X.Y.Z` existe déjà sur GHCR ;
+  - refus si `X.Y.Z` existe déjà sur GHCR ; une erreur d'authentification
+    ou réseau n'est jamais prise pour « tag absent » ;
   - authentification par `GITHUB_TOKEN` ;
-  - contrôle que `X.Y` et `X` pointent vers le digest publié.
-  - Le job suivant fait un `docker pull` anonyme par tag et par digest, puis
-    un smoke test sur `/health`.
+  - publication d'un index multi-plateforme, puis contrôle que `X.Y.Z`, `X.Y`
+    et `X` pointent vers son digest.
+  - Le job suivant fait, sur chaque architecture, un `docker pull` anonyme
+    par tag et par digest, un smoke test sur `/health` et le contrôle du
+    config digest attendu.
 
 Paramètres GitHub configurés par le propriétaire du dépôt (vérifiés par
 l'API GitHub le 2026-10-08, non contrôlés par la CI) :
@@ -539,11 +556,198 @@ Preuves détaillées de la stack ([`evidence/`](evidence/)) :
 | [`after/app-functional.txt`](evidence/after/app-functional.txt) | endpoints contre PostgreSQL |
 | [`after/compose-hardening.txt`](evidence/after/compose-hardening.txt) | stack Compose durcie : secret absent, healthy, capabilities, lecture seule, isolation réseau, intégration, persistance |
 
-Les fichiers de `after/` qui dépendent de l'image (tous sauf `flake8.txt` et `hadolint.txt`) se régénèrent avec `scripts/evidence/regenerate.sh` (Docker démarré, Dive et Trivy installés, `PYTHON` pointant vers un Python 3.15 avec `requirements-dev.txt`) ; `hadolint.txt` avec `scripts/evidence/hadolint.sh > evidence/after/hadolint.txt 2>&1`. Le script ne touche pas au répertoire `secrets/` (secret temporaire fourni par un override Compose), nettoie conteneurs, volumes et fichiers temporaires même en cas d'échec ou d'interruption, et sort en erreur si un résultat attendu n'est pas obtenu.
+Ces mesures TP1 portent sur le Dockerfile d'avant le TP2 (commit `33e6728`)
+et ne sont pas écrasées. Depuis le TP2, `scripts/evidence/regenerate.sh` sans
+argument, ou avec `build run scan`, délègue au parcours TP2 (§ 8). Les étapes
+TP1 telles que `all` ou `dive-db` restent accessibles : le script extrait la
+révision TP1 dans un temporaire, exécute son script historique et conserve
+uniquement les preuves régénérées dans un nouveau dossier
+`evidence/tp1/replay-*/`, avec un fichier `revision.txt`. Le code de sortie du
+parcours historique est conservé, y compris si ses contrôles échouent.
+
+```bash
+scripts/evidence/regenerate.sh all          # tous les contrôles historiques TP1
+scripts/evidence/regenerate.sh dive-db      # mesure historique PostgreSQL
+scripts/evidence/regenerate.sh --tp1 run    # run TP1 explicite ; run seul = TP2
+```
+
+Le commit TP1 doit être disponible dans l'historique Git local. Prérequis :
+Docker démarré, Dive et Trivy installés, `PYTHON` pointant vers un Python 3.15
+avec `requirements-dev.txt`. Les fichiers `flake8.txt` et `hadolint.txt` ne
+sont pas régénérés par ce parcours. Le script historique ne lit pas le
+répertoire `secrets/` de l'utilisateur ; son secret Compose est temporaire et
+ses ressources sont nettoyées même après échec. Le checkout courant et les
+preuves versionnées dans `evidence/after/` restent inchangés.
+
+## 8. TP2 — BuildKit, secret et multi-architecture
+
+Répartition : Max a écrit le Dockerfile et [`docker-bake.hcl`](docker-bake.hcl)
+(PR #8). JB a adapté les politiques, la CI, la publication et les preuves.
+Ce TP2 n'ajoute ni SBOM, ni VEX, ni signature.
+
+### Build avec Bake
+
+```bash
+# Jeton factice, jamais un vrai credential ; secrets/ est exclu de Git et du contexte.
+install -d -m 0700 secrets
+{ printf 'TP2_'; openssl rand -hex 24; } | tr -d '\n' > secrets/build_token
+chmod 0600 secrets/build_token
+docker buildx create --name tp2 --driver docker-container --use
+
+docker buildx bake --print app app-ci        # résolution, sans build
+docker buildx bake app                       # amd64 + arm64 -> dist/app.oci.tar, sans push
+CI_PLATFORM=linux/arm64 TAG=ci-arm64 docker buildx bake app-ci   # une plateforme, chargée dans Docker
+```
+
+| Variable | Rôle | Défaut |
+| --- | --- | --- |
+| `IMAGE`, `TAG` | nom sans tag, tag sans `v` | `flask-api`, `local` |
+| `BUILD_SECRET_FILE` | **chemin** du jeton, jamais son contenu | `secrets/build_token` |
+| `CI_PLATFORM` | plateforme unique de `app-ci` | `linux/amd64` |
+| `CACHE_REF` | cache registre distinct des tags de release ; vide : aucun échange distant | vide |
+
+Un chemin de secret hors du dépôt exige `--allow fs.read=<chemin>` avec
+Buildx récent : la CI l'accorde à ce seul fichier. Les anciennes commandes
+`docker build .` sans `--secret` échouent désormais, comme prévu.
+
+### Secret de build
+
+Le jeton `package_token` est monté seulement pendant le `RUN` pip, en
+`/run/secrets/package_token` (`required=true`, `0400`, uid/gid 65532), et
+doit être non vide. Il ne passe ni par `ARG` ni par `ENV`. Le build CI
+([`scripts/ci/build_variant.sh`](scripts/ci/build_variant.sh)) prouve, sur un
+builder `docker-container` dédié :
+
+- secret absent puis vide : échec, avec `--no-cache` pour qu'une couche en
+  cache ne masque pas le contrôle ;
+- `secrets/build_token` ignoré par Git, et refusé par le contexte Docker même
+  si le fichier existe ;
+- jeton absent de l'étape suivante ;
+- aucune occurrence exacte du jeton dans l'archive finale, dans l'archive de
+  l'étape `builder` et dans les blobs du cache `mode=max` exporté : historique,
+  configuration et couches décompressées, ainsi que dans les logs ; le
+  détecteur est lui-même testé sur une fuite volontaire ;
+- Trivy `--scanners secret` avec une règle dédiée au format du jeton
+  ([`trivy-secret.yaml`](scripts/ci/trivy-secret.yaml)) sur les deux
+  archives, après contrôle positif sur un fixture fuyant isolé.
+
+Les contrôles affichent succès ou échec et un numéro d'entrée, jamais le
+jeton. Les logs bruts du build restent dans un répertoire temporaire privé.
+Même après un échec ou une interruption, seuls ceux qui ne contiennent pas le
+jeton sont copiés dans les rapports publiés ; un log fuyant est retenu
+(marqueur `.withheld`) et fait échouer le job. Le fichier jeton est détruit en
+fin de build.
+
+### Caches et limites
+
+- **pip** : montage cache BuildKit sur `PIP_CACHE_DIR=/home/nonroot/.cache/pip`
+  (`sharing=locked`), jamais dans une couche. `check_pinning.py --require-tp2`
+  exige exactement ce montage et refuse `--no-cache-dir`. Preuve : sur le même
+  builder, seule la couche pip est invalidée (commentaire ajouté à une copie
+  de `requirements.txt`), et pip réutilise les 18 téléchargements
+  (`Using cached`, aucun `Downloading`). `--no-cache` ne convient pas pour
+  cette preuve : BuildKit ignore alors aussi le montage cache (vérifié :
+  18 téléchargements).
+- **Couches** : `CACHE_REF` active l'import et l'export registre en `mode=max`
+  déclarés dans le HCL. La CI ne l'utilise pas : aucune écriture distante,
+  donc aucune PR ou fork ne peut empoisonner un cache de confiance. Preuve :
+  export `type=local,mode=max` puis build sur un builder neuf qui réutilise
+  les couches (étapes `CACHED`).
+- **Limites** : le cache `mode=max` ne transporte pas le contenu des montages
+  cache. pip n'est donc pas persistant d'un runner à l'autre, ce qui n'est pas
+  un objectif du TP. Un cache registre partagé en CI demanderait des refs par
+  architecture et `packages: write` sur le seul job concerné, après
+  autorisation.
+
+### Deux architectures, une identité vérifiée
+
+- Runners natifs : `ubuntu-24.04` (amd64) et `ubuntu-24.04-arm` (arm64), avec
+  build, intégration Compose (API et PostgreSQL sur la même plateforme) et
+  tests HTTP. L'architecture est mesurée **dans** chaque conteneur (`uname`) ;
+  l'Image ID exécuté est comparé à celui de l'image construite.
+- Dive et Trivy tournent sur amd64 pour les deux archives : les inspecter ne
+  demande pas de les exécuter. Tous les rapports complets sont tentés avant
+  les gates, et tous les gates s'exécutent avant que le job échoue : une erreur
+  de rapport ou un gate rouge ne masque pas les contrôles suivants. Les seuils
+  TP1 sont conservés : Dive ≥ 80 %, HIGH/CRITICAL corrigibles bloquants, et
+  PostgreSQL scanné pour la même plateforme.
+- Chaque variante produit son archive, son SHA256, son Image ID, sa plateforme,
+  son commit et son run ([`image_archive.py`](scripts/ci/image_archive.py)).
+  Une archive corrompue, permutée, d'une autre architecture ou d'un autre run
+  est refusée. La tentative attendue est celle du job de build (output de
+  confiance) : un « Re-run failed jobs » des scans ou de la release accepte
+  l'artefact de la tentative précédente, jamais une tentative future.
+
+### Publication sans reconstruction
+
+Sur tag `vX.Y.Z` uniquement, après succès des trois agrégateurs
+([`publish_index.sh`](scripts/ci/publish_index.sh)) :
+
+1. contrôles SemVer, ascendance `main`, ordre des alias, absence prouvée de
+   `X.Y.Z` (une erreur d'authentification ou réseau arrête la release) ;
+2. vérification des deux archives contre les outputs des jobs producteurs ;
+3. `crane push` de chaque archive vers une référence de staging propre au run ;
+   contrôle du config digest, de la plateforme et des DiffIDs après `crane pull` ;
+4. index assemblé à partir des **digests** vérifiés, contrôlé (exactement
+   amd64 + arm64, sans attestations) ;
+5. tags `X.Y.Z`, puis `X.Y`, puis `X` posés sur ce digest d'index, chacun
+   vérifié ;
+6. pull anonyme et smoke test par tag et par digest sur chaque architecture,
+   avec le config digest attendu.
+
+**États partiels et reprise.** Un registre ne permet pas de poser plusieurs
+tags de façon atomique. Un échec avant l'étape 5 ne promeut rien : seules des
+refs `staging-<run>-<tentative>-*` existent, conservées pour diagnostic. Un
+échec pendant l'étape 5 peut laisser `X.Y.Z` publié avec `X.Y` et/ou `X`
+encore sur la release précédente. Le job affiche alors le digest de l'index
+candidat et celui des trois tags. Reprise :
+
+- **`X.Y.Z` absent** : relancer le job de release (« Re-run failed jobs »). Il
+  réutilise les mêmes archives validées ; les nouvelles refs de staging sont
+  propres à la tentative.
+- **`X.Y.Z` présent sur l'index candidat de ce run**, alias manquants ou
+  anciens : ne pas relancer le job, qui refuse à raison une version existante.
+  Un mainteneur disposant de `packages: write` vérifie que `vX.Y.Z` est
+  toujours la release stable la plus récente. Il pose ensuite chaque alias
+  manquant sur ce digest (`crane tag ghcr.io/…@<digest> X.Y`) et le vérifie
+  (`crane digest`), puis lance les pulls anonymes de l'étape 6. `X.Y.Z`
+  n'est jamais réécrit.
+- **`X.Y.Z` présent sur un autre digest** : arrêt. Ne rien écraser ;
+  analyser l'origine, puis publier une nouvelle version de correctif.
+
+Le chemin archive → push → index → pull a été validé localement avec un
+registre jetable. Aucune image de test n'a été poussée sur GHCR.
+
+### Preuves TP2
+
+[`scripts/evidence/tp2.sh`](scripts/evidence/tp2.sh) (étapes `build run scan`)
+écrit dans `evidence/tp2/<run>-<arch>/` : environnement (commit, versions
+Docker, Buildx, Compose), logs de build, du cache pip et du cache de couches,
+métadonnées, intégration. Les mesures TP1 de `evidence/after/` sont conservées.
+
+| Contrôle | Local arm64 (natif) | Local amd64 (émulé) | CI amd64 / arm64 (natifs) | Release |
+| --- | --- | --- | --- | --- |
+| Secret absent/vide refusé, aucune fuite | ✅ | ✅ | ✅ / ✅ | — |
+| Cache pip réutilisé (18 `Using cached`, 0 `Downloading`) | ✅ | ✅ | ✅ / ✅ | — |
+| Cache de couches sur builder neuf (6 étapes `CACHED`) | ✅ | ✅ | ✅ / ✅ | — |
+| Compose + 3 tests HTTP, architecture et Image ID vérifiés | ✅ | ✅ | ✅ / ✅ | — |
+| Dive ≥ 80 % | ✅ 99,74 % | ✅ 99,72 % | ✅ 99,72 % / 99,74 % | — |
+| Trivy, toutes sévérités (API, deps, PostgreSQL) | ✅ 0 | ✅ 0 | ✅ 0 / 0 | — |
+| Index amd64 + arm64 publié, pulls anonymes | registre jetable | — | — | à vérifier (non exécutée) |
+
+CI : [run 40343481595](https://github.com/maximilianpw/devsecops-max-jb/actions/runs/40343481595)
+(PR #10, commit `d5989da`, 2026-10-26), Buildx 0.38.0, BuildKit 0.33.1 ;
+les 5 checks requis sont verts, et la publication est sautée hors tag.
+Image IDs testés puis scannés : amd64 `sha256:253721ca…`, arm64
+`sha256:20d11bce…`. Rapports : artefacts `build-reports-*` et `scan-reports-*`.
+
+Preuves locales : `evidence/tp2/local-1793025514-arm64/` et `evidence/tp2/local-1793025818-amd64/`. Environnement : macOS arm64, Docker 29.5.3 (containerd image store),
+Buildx 0.34.1, BuildKit 0.33.1 (builder `docker-container`), le 2026-10-26.
 
 ## Reproduction locale
 
-Prérequis : Docker avec Compose v2 et BuildKit, Python 3.15, Hadolint
+Prérequis : Docker avec Compose v2, Buildx (Bake, builder `docker-container`)
+et BuildKit, openssl, Python 3.15, Hadolint
 2.15.1, Dive 0.13.1, Trivy 0.75.0.
 
 ```bash
@@ -556,11 +760,14 @@ pytest -m "not integration"
 hadolint --config .hadolint.yaml Dockerfile
 python3 scripts/ci/check_hadolint_policy.py
 docker compose config --no-interpolate --format json \
-  | python3 scripts/ci/check_pinning.py --compose-json -
+  | python3 scripts/ci/check_pinning.py --compose-json - --require-tp2
 
-# Build unique, Dive, Trivy
-docker buildx build --platform linux/amd64 --provenance=false --sbom=false \
-  --load -t flask-api:local .
+# Chaîne TP2 complète d'une architecture (jeton factice éphémère, preuves
+# secret/cache, Compose, Dive, Trivy) -> evidence/tp2/<run>-<arch>/
+ARCH=arm64 scripts/evidence/tp2.sh build run scan
+
+# Ou build seul (jeton factice : § 8), Dive, Trivy
+CI_PLATFORM=linux/amd64 docker buildx bake app-ci   # charge flask-api:local
 dive --ci --ci-config .dive-ci flask-api:local
 docker save -o image.tar flask-api:local
 trivy image --input image.tar --scanners vuln \

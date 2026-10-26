@@ -25,6 +25,7 @@ Code retour non nul si au moins une violation est trouvée.
 import argparse
 import json
 import re
+import shlex
 import sys
 import unicodedata
 from pathlib import Path
@@ -33,6 +34,15 @@ DIGEST_RE = re.compile(r"@sha256:[0-9a-f]{64}$")
 ACTION_SHA_RE = re.compile(r"^[^@\s]+@[0-9a-f]{40}$")
 REQUIREMENT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*==[A-Za-z0-9.!+_-]+$")
 # Forme d'une directive de parseur (`# escape=`, `# syntax=`...), comme BuildKit.
+FRONTEND_RE = re.compile(
+    r"^# syntax=docker/dockerfile:1(?:\.[0-9]+){0,2}@sha256:[0-9a-f]{64}$"
+)
+PIP_CACHE = "/home/nonroot/.cache/pip"
+CACHE_MOUNT = {
+    "type": "cache", "target": PIP_CACHE, "uid": "65532",
+    "gid": "65532", "sharing": "locked",
+}
+
 DIRECTIVE_RE = re.compile(r"^#\s*[A-Za-z][A-Za-z0-9_-]*\s*=")
 # Délimiteurs de heredoc acceptés : simples, éventuellement entre guillemets.
 HEREDOC_NAME_RE = re.compile(r"^(['\"]?)[A-Za-z0-9_.-]+\1$")
@@ -66,8 +76,8 @@ def instructions(text):
     et ADD, sur un mot shell entier `[fd]<<[-]nom`, nom vide exclu.
 
     Syntaxes ambiguës refusées (ValueError) plutôt qu'interprétées : directive
-    de parseur (`# escape=`, `# syntax=`, qui changent la lecture ou chargent
-    un frontend non épinglé), échappement final doublé (`\\\\`), délimiteur
+    de parseur hors frontend stable épinglé en première ligne, échappement final
+    doublé (`\\\\`), délimiteur
     de heredoc autre qu'un nom simple, heredoc non terminé.
     """
     text = text.removeprefix("\ufeff")
@@ -75,11 +85,16 @@ def instructions(text):
     # Découpage sur LF uniquement, comme BuildKit (splitlines() couperait aussi
     # sur \v, \f, U+2028...) ; les autres séparateurs sont refusés ci-dessus.
     lines = text.split("\n")
-    for line in lines:
-        if not line.strip().startswith("#"):
+    # Une directive après un commentaire/ligne vide serait ignorée par BuildKit.
+    # Refuser aussi les doublons dans l’en-tête.
+    for index, line in enumerate(lines):
+        if line.strip() and not line.lstrip().startswith("#"):
             break
         if DIRECTIVE_RE.match(line.strip()):
-            raise ValueError(f"directive de parseur interdite : {line.strip()}")
+            if index != 0 or not FRONTEND_RE.fullmatch(line):
+                raise ValueError(
+                    f"directive de parseur interdite ou frontend non épinglé : {line}"
+                )
     result, logical, index = [], None, 0
     while index < len(lines) or logical is not None:
         raw = lines[index] if index < len(lines) else ""
@@ -222,7 +237,82 @@ def split_instruction(logical):
     return keyword.upper(), rest[0] if rest else ""
 
 
-def check_dockerfile(path):
+def check_pip_cache(parsed, require_tp2=False):
+    """Le cache pip doit être désactivé (TP1) ou monté selon le contrat TP2.
+
+    Les RUN pip sont volontairement restreints à une forme shell explicite ;
+    les constructions indirectes ne sont pas un contrat supporté.
+    """
+    errors, cache_env, mounted = [], False, 0
+    for keyword, rest in parsed:
+        if keyword == "FROM":
+            cache_env = False
+        if keyword == "ENV" and "PIP_CACHE_DIR" in rest:
+            cache_env = rest.strip() == f"PIP_CACHE_DIR={PIP_CACHE}"
+            if not cache_env:
+                errors.append("PIP_CACHE_DIR doit être fixé au chemin du contrat")
+        if keyword != "RUN" or not re.search(r"\bpip(?:3)?\b", rest):
+            continue
+        try:
+            words = shlex.split(rest)
+        except ValueError:
+            errors.append("commande pip illisible")
+            continue
+        mounts = []
+        while words and words[0].startswith("--mount="):
+            fields = words.pop(0)[len("--mount="):].split(",")
+            pairs = [field.partition("=") for field in fields]
+            options = {key: value for key, _, value in pairs}
+            if len(options) != len(pairs):
+                errors.append("option de montage dupliquée")
+            mounts.append(options)
+        caches = [m for m in mounts if m.get("type") == "cache"]
+        if caches or require_tp2:
+            secrets = [m for m in mounts if m.get("type") == "secret"]
+            expected_secret = {
+                "type": "secret", "id": "package_token", "required": "true",
+                "uid": "65532", "gid": "65532", "mode": "0400",
+            }
+            if secrets != [expected_secret]:
+                errors.append("montage secret package_token hors contrat")
+        if not caches and not require_tp2 and "--no-cache-dir" in words:
+            continue
+        if caches != [CACHE_MOUNT] or not cache_env:
+            errors.append("pip exige le cache BuildKit et PIP_CACHE_DIR du contrat")
+        if "--no-cache-dir" in words or "PIP_NO_CACHE_DIR" in rest:
+            errors.append("le chemin TP2 doit réutiliser le cache pip")
+        command = "pip --python /app/venv/bin/python install -r /app/requirements.txt"
+        # Pas d'override --cache-dir, de variable shell ou de commande après pip.
+        commands, current = [], []
+        for word in words:
+            if word == "&&":
+                commands.append(current)
+                current = []
+            else:
+                current.append(word)
+        commands.append(current)
+        secret_check = (
+            "from pathlib import Path; import sys; "
+            "sys.exit(0 if Path('/run/secrets/package_token').read_bytes() "
+            "else 'Build secret package_token must not be empty')"
+        )
+        setup = [
+            ["python", "-m", "venv", "--without-pip", "/app/venv"],
+            ["test", "-s", "/run/secrets/package_token"],
+            ["test", "-w", "${PIP_CACHE_DIR}"],
+            ["python", "-c", secret_check],
+        ]
+        if commands[-1] != command.split() or any(
+            c not in setup for c in commands[:-1]
+        ):
+            errors.append("commande pip TP2 hors contrat")
+        mounted += 1
+    if require_tp2 and mounted != 1:
+        errors.append("TP2 exige exactement une installation pip avec cache monté")
+    return errors
+
+
+def check_dockerfile(path, require_tp2=False):
     errors = []
     args = {}
     stages = set()
@@ -232,6 +322,11 @@ def check_dockerfile(path):
         parsed = instructions(Path(path).read_bytes().decode("utf-8"))
     except ValueError as error:  # UnicodeDecodeError compris
         return [f"{path}: Dockerfile illisible : {error}"]
+    errors += [f"{path}: {e}" for e in check_pip_cache(parsed, require_tp2)]
+    if require_tp2 and not FRONTEND_RE.fullmatch(
+        Path(path).read_text().removeprefix("\ufeff").split("\n")[0]
+    ):
+        errors.append(f"{path}: TP2 exige la directive frontend épinglée en tête")
     for keyword, rest in parsed:
         if keyword == "ONBUILD":
             # Un déclencheur ne modifie pas les ARG ni les étapes du build.
@@ -362,6 +457,7 @@ def check_requirements(paths):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--dockerfile", default="Dockerfile")
+    parser.add_argument("--require-tp2", action="store_true")
     parser.add_argument(
         "--compose-json",
         required=True,
@@ -382,7 +478,7 @@ def main():
         compose = json.loads(Path(options.compose_json).read_text())
 
     errors = (
-        check_dockerfile(options.dockerfile)
+        check_dockerfile(options.dockerfile, options.require_tp2)
         + check_compose(compose)
         + check_hardening(compose)
         + check_workflows(options.workflows)

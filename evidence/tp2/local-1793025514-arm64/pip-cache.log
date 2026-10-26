@@ -1,0 +1,75 @@
+#0 building with "tp2-local-1793025514-1-arm64" instance using docker-container driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.95kB done
+#1 DONE 0.0s
+
+#2 resolve image config for docker-image://docker.io/docker/dockerfile:1.27.1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e
+#2 DONE 0.0s
+
+#3 docker-image://docker.io/docker/dockerfile:1.27.1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e
+#3 resolve docker.io/docker/dockerfile:1.27.1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e done
+#3 CACHED
+
+#4 [internal] load metadata for cgr.dev/chainguard/python@sha256:dde1a2549dd62864f0263dae8e877680837b4e738a7ecc85c671c55c069848ac
+#4 DONE 0.0s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 467B done
+#5 DONE 0.0s
+
+#6 [internal] setting cache mount permissions
+#6 DONE 0.0s
+
+#7 [builder 1/4] FROM cgr.dev/chainguard/python@sha256:dde1a2549dd62864f0263dae8e877680837b4e738a7ecc85c671c55c069848ac
+#7 resolve cgr.dev/chainguard/python@sha256:dde1a2549dd62864f0263dae8e877680837b4e738a7ecc85c671c55c069848ac done
+#7 DONE 0.0s
+
+#8 [internal] load build context
+#8 transferring context: 231B done
+#8 DONE 0.0s
+
+#9 [builder 2/4] WORKDIR /app
+#9 CACHED
+
+#6 [internal] setting cache mount permissions
+#6 CACHED
+
+#10 [builder 3/4] COPY requirements.txt /app/requirements.txt
+#10 DONE 0.0s
+
+#11 [builder 4/4] RUN --mount=type=cache,target=/home/nonroot/.cache/pip,uid=65532,gid=65532,sharing=locked     --mount=type=secret,id=package_token,required=true,uid=65532,gid=65532,mode=0400     python -c "from pathlib import Path; import sys; sys.exit(0 if Path('/run/secrets/package_token').read_bytes() else 'Build secret package_token must not be empty')"     && test -w "/home/nonroot/.cache/pip"     && python -m venv --without-pip /app/venv     && pip --python /app/venv/bin/python install -r /app/requirements.txt
+#11 0.224 Collecting Flask==3.1.3 (from -r /app/requirements.txt (line 1))
+#11 0.225   Using cached flask-3.1.3-py3-none-any.whl.metadata (3.2 kB)
+#11 0.231 Collecting Werkzeug==3.1.9 (from -r /app/requirements.txt (line 2))
+#11 0.232   Using cached werkzeug-3.1.9-py3-none-any.whl.metadata (4.1 kB)
+#11 0.253 Collecting psycopg2-binary==2.9.13 (from -r /app/requirements.txt (line 3))
+#11 0.254   Using cached psycopg2_binary-2.9.13-cp315-cp315-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl.metadata (4.9 kB)
+#11 0.257 Collecting gunicorn==26.2.0 (from -r /app/requirements.txt (line 4))
+#11 0.257   Using cached gunicorn-26.2.0-py3-none-any.whl.metadata (5.5 kB)
+#11 0.259 Collecting blinker==1.9.0 (from -r /app/requirements.txt (line 5))
+#11 0.260   Using cached blinker-1.9.0-py3-none-any.whl.metadata (1.6 kB)
+#11 0.263 Collecting click==8.5.0 (from -r /app/requirements.txt (line 6))
+#11 0.263   Using cached click-8.5.0-py3-none-any.whl.metadata (2.6 kB)
+#11 0.265 Collecting itsdangerous==2.2.0 (from -r /app/requirements.txt (line 7))
+#11 0.266   Using cached itsdangerous-2.2.0-py3-none-any.whl.metadata (1.9 kB)
+#11 0.268 Collecting Jinja2==3.1.6 (from -r /app/requirements.txt (line 8))
+#11 0.269   Using cached jinja2-3.1.6-py3-none-any.whl.metadata (2.9 kB)
+#11 0.284 Collecting MarkupSafe==3.0.4 (from -r /app/requirements.txt (line 9))
+#11 0.285   Using cached markupsafe-3.0.4-cp315-cp315-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl.metadata (2.7 kB)
+#11 0.288 Using cached flask-3.1.3-py3-none-any.whl (103 kB)
+#11 0.289 Using cached werkzeug-3.1.9-py3-none-any.whl (228 kB)
+#11 0.290 Using cached psycopg2_binary-2.9.13-cp315-cp315-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl (5.9 MB)
+#11 0.293 Using cached gunicorn-26.2.0-py3-none-any.whl (228 kB)
+#11 0.294 Using cached blinker-1.9.0-py3-none-any.whl (8.5 kB)
+#11 0.294 Using cached click-8.5.0-py3-none-any.whl (125 kB)
+#11 0.295 Using cached itsdangerous-2.2.0-py3-none-any.whl (16 kB)
+#11 0.295 Using cached jinja2-3.1.6-py3-none-any.whl (134 kB)
+#11 0.295 Using cached markupsafe-3.0.4-cp315-cp315-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl (24 kB)
+#11 0.316 Installing collected packages: psycopg2-binary, MarkupSafe, itsdangerous, gunicorn, click, blinker, Werkzeug, Jinja2, Flask
+#11 0.611 
+#11 0.612 Successfully installed Flask-3.1.3 Jinja2-3.1.6 MarkupSafe-3.0.4 Werkzeug-3.1.9 blinker-1.9.0 click-8.5.0 gunicorn-26.2.0 itsdangerous-2.2.0 psycopg2-binary-2.9.13
+#11 DONE 0.7s
+WARNING: No output specified with docker-container driver. Build result will only remain in the build cache. To push result image into registry use --push or to load image into docker use --load
+
+View build details: docker-desktop://dashboard/build/tp2-local-1793025514-1-arm64/tp2-local-1793025514-1-arm640/5pqk0g59iwzz73p57koogisga

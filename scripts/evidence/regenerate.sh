@@ -4,13 +4,16 @@
 #
 # Usage (depuis la racine du dépôt, Docker démarré) :
 #   scripts/evidence/regenerate.sh [all|image|dive|dive-db|trivy|run|compat|dockerignore|cache|functional|hardening]...
+# Sur TP2 : sans argument, ou avec build/run/scan, délégation au parcours TP2.
+# Les étapes propres au TP1 rejouent sa révision historique dans un temporaire.
+# --tp1 sélectionne explicitement ce parcours (notamment pour run seul).
 #
 # Prérequis : Docker avec Compose v2 et BuildKit, Dive 0.13.1, Trivy 0.75.0,
 # Python 3.15 avec requirements-dev.txt (variable PYTHON, défaut python3).
 # Les fichiers flake8.txt et hadolint.txt ne dépendent pas de l'image et ne
 # sont pas régénérés ici (hadolint.txt : scripts/evidence/hadolint.sh).
 #
-# Garanties :
+# Garanties du parcours historique (sans docker-bake.hcl) :
 # - le dépôt n'est pas modifié hors de evidence/after/ : le secret de la base
 #   est généré dans un répertoire temporaire et fourni à Compose par un
 #   fichier override ; le répertoire secrets/ de l'utilisateur n'est pas lu ;
@@ -20,6 +23,32 @@
 #   d'eux ne l'est pas, après avoir écrit les preuves ;
 # - aucune valeur de mot de passe n'est écrite dans les preuves.
 set -euo pipefail
+
+if [ -f docker-bake.hcl ]; then
+  case "${1:-}" in
+    --tp1) shift ;;
+    all|image|dive|dive-db|trivy|compat|dockerignore|cache|functional|hardening) ;;
+    *) exec scripts/evidence/tp2.sh "$@" ;;
+  esac
+  # Les mesures TP1 doivent garder leur Dockerfile, pas celui du TP2 qui exige
+  # un secret de build. Ne pas écraser les preuves historiques déjà versionnées.
+  tp1_commit=33e67287c9c02dc0b5da67a75d40e46d2c81c45d
+  tp1_work=$(mktemp -d)
+  trap 'rm -rf "$tp1_work"' EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  git archive "$tp1_commit" | tar -x -C "$tp1_work" --exclude=evidence/after
+  # Le contrôle historique du contexte doit aussi pouvoir exclure un .git.
+  git -C "$tp1_work" init --quiet
+  mkdir -p "$tp1_work/evidence/after" evidence/tp1
+  tp1_out=$(mktemp -d "$PWD/evidence/tp1/replay-XXXXXXXX")
+  printf '%s\n' "$tp1_commit" > "$tp1_out/revision.txt"
+  rc=0
+  (cd "$tp1_work" && bash scripts/evidence/regenerate.sh "$@") || rc=$?
+  cp -R "$tp1_work/evidence/after/." "$tp1_out/"
+  printf 'Preuves TP1 : %s\n' "$tp1_out"
+  exit "$rc"
+fi
 
 IMAGE=flask-api:local
 PLATFORM=linux/amd64
