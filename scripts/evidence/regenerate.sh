@@ -8,7 +8,7 @@
 # Prérequis : Docker avec Compose v2 et BuildKit, Dive 0.13.1, Trivy 0.75.0,
 # Python 3.15 avec requirements-dev.txt (variable PYTHON, défaut python3).
 # Les fichiers flake8.txt et hadolint.txt ne dépendent pas de l'image et ne
-# sont pas régénérés ici.
+# sont pas régénérés ici (hadolint.txt : scripts/evidence/hadolint.sh).
 #
 # Garanties :
 # - le dépôt n'est pas modifié hors de evidence/after/ : le secret de la base
