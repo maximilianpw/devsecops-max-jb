@@ -1,4 +1,4 @@
-# date: 2026-10-26T10:23:53Z
+# date: 2026-10-26T10:36:10Z
 # Haskell Dockerfile Linter 2.15.1
 # cmd: hadolint --config .hadolint.yaml Dockerfile
 exit: 0
@@ -145,19 +145,17 @@ hadolint exit: 0
 ::error::tag-version: image non épinglée par digest : cgr.dev/chainguard/python:3.14
 check_pinning exit: 1
 ## add-url
-    cgr.dev/chainguard/python@sha256:49fd266eb8a1331194c318b742087c7a2939cc5794fa64f17feb9e17e12703e2
+    FROM cgr.dev/chainguard/python@sha256:49fd266eb8a1331194c318b742087c7a2939cc5794fa64f17feb9e17e12703e2
     ADD https://example.com/app.tar.gz /app/
     USER 65532
-add-url:1:1 unexpected 'c' expecting '#', ADD, ARG, CMD, COPY, ENTRYPOINT, ENV, EXPOSE, FROM, HEALTHCHECK, LABEL, MAINTAINER, ONBUILD, RUN, SHELL, STOPSIGNAL, USER, VOLUME, WORKDIR, a pragma, end of input, or whitespaces 
-hadolint exit: 1
+hadolint exit: 0
 1 violation(s) de pinning ou de durcissement.
 ::error::add-url: ADD interdit, utiliser COPY : ADD https://example.com/app.tar.gz /app/
 check_pinning exit: 1
 ## sans-user
-    cgr.dev/chainguard/python@sha256:49fd266eb8a1331194c318b742087c7a2939cc5794fa64f17feb9e17e12703e2
+    FROM cgr.dev/chainguard/python@sha256:49fd266eb8a1331194c318b742087c7a2939cc5794fa64f17feb9e17e12703e2
     RUN ["true"]
-sans-user:1:1 unexpected 'c' expecting '#', ADD, ARG, CMD, COPY, ENTRYPOINT, ENV, EXPOSE, FROM, HEALTHCHECK, LABEL, MAINTAINER, ONBUILD, RUN, SHELL, STOPSIGNAL, USER, VOLUME, WORKDIR, a pragma, end of input, or whitespaces 
-hadolint exit: 1
+hadolint exit: 0
 # -> USER : vérifié par inspection de l'image (65532:65532, evidence/after/image.txt)
 ## hors-registre
     FROM python:3.10-slim
@@ -259,6 +257,51 @@ check_pinning: ['ADD interdit, utiliser COPY : ADD absent2 /z']
     ADD absent /y
 buildkit: erreur unterminated heredoc
 check_pinning: ["Dockerfile illisible : heredoc 'EOF' non terminé (COPY <<EOF /x)"]
+## mot-cle-coupe
+    FROM scratch
+    A\
+    DD absent /x
+buildkit: [1/1] ADD absent /x
+buildkit: erreur "/absent": not found
+check_pinning: ['ADD interdit, utiliser COPY : ADD absent /x']
+## heredoc-nom-vide
+    FROM scratch
+    COPY <<'' /x
+    ADD absent /y
+    
+buildkit: [1/2] COPY << /x
+buildkit: [2/2] ADD absent /y
+buildkit: erreur "/absent": not found
+check_pinning: ['ADD interdit, utiliser COPY : ADD absent /y']
+# syntaxes ambiguës : check_pinning.py refuse au lieu d'interpréter
+## double-antislash
+    FROM scratch
+    LABEL p=C:\\
+    ADD absent /x
+buildkit: [1/1] ADD absent /x
+buildkit: erreur "/absent": not found
+check_pinning: ['Dockerfile illisible : échappement final ambigu : LABEL p=C:\\\\']
+## directive-escape
+    # escape=`
+    FROM scratch
+    LABEL n=v`
+    ADD absent /x
+check_pinning: ['Dockerfile illisible : directive de parseur interdite : # escape=`']
+## directive-indentee
+      # escape=`
+    FROM scratch
+    LABEL n=v`
+    ADD absent /x
+check_pinning: ['Dockerfile illisible : directive de parseur interdite : # escape=`']
+## directive-apres-inconnue
+    # anything=x
+    # escape=`
+    FROM scratch
+    LABEL n=v`
+    ADD absent /x
+buildkit: [1/1] ADD absent /x
+buildkit: erreur "/absent": not found
+check_pinning: ['Dockerfile illisible : directive de parseur interdite : # anything=x']
 ## bom
     ﻿FROM cgr.dev/chainguard/python:latest-dev AS mutable
 buildkit: TARGET            DESCRIPTION

@@ -46,7 +46,6 @@ def test_dockerfile_du_depot_conforme():
         f"{BASE}\n# commentaire \\\n{ADD_URL}\n",
         f"{BASE}\nRUN echo a \\\n# commentaire\n  b\n{ADD_URL}\n",
         f"{BASE}\nonbuild add a /b\n",
-        f"# escape=`\n{BASE}\nRUN echo `\n  b\n{ADD_URL}\n",
         f"{BASE}\nRUN <<-EOT sh\n\techo ok\n\tEOT\n{ADD_URL}\n",
         f"{BASE}\nADD a \\\n",
         f"FROM scratch AS u\nRUN echo '<<EOF'\n{BASE}\n{ADD_URL}\n",
@@ -54,6 +53,9 @@ def test_dockerfile_du_depot_conforme():
         f"{BASE}\nCOPY <<EOF-X /x\ntexte\nEOF-X\n\n{ADD_URL}\n",
         f"{BASE}\nRUN cat 0<<EOF\ntexte\nEOF\n{ADD_URL}\n",
         f"{BASE}\nRUN echo a<<EOF\n{ADD_URL}\n",
+        f"{BASE}\nA\\\nDD https://example.com/app.tar.gz /app/\n",
+        f"{BASE}\nCOPY <<'' /x\n{ADD_URL}\n\nUSER 65532\n",
+        f"# commentaire\n\n# escape=`\n{BASE}\n{ADD_URL}\n",
     ],
     ids=[
         "simple",
@@ -61,7 +63,6 @@ def test_dockerfile_du_depot_conforme():
         "commentaire-antislash",
         "commentaire-dans-continuation",
         "onbuild-minuscules",
-        "directive-escape",
         "apres-heredoc",
         "continuation-en-fin-de-fichier",
         "faux-heredoc-entre-guillemets",
@@ -69,6 +70,9 @@ def test_dockerfile_du_depot_conforme():
         "delimiteur-complet",
         "heredoc-avec-descripteur",
         "faux-heredoc-colle-a-un-mot",
+        "mot-cle-coupe-par-continuation",
+        "heredoc-nom-vide",
+        "directive-apres-ligne-vide-est-un-commentaire",
     ],
 )
 def test_add_refuse(tmp_path, content):
@@ -93,6 +97,32 @@ def test_heredoc_n_est_pas_une_instruction(tmp_path, opening, name):
         "USER 65532\n"
     )
     assert dockerfile_errors(tmp_path, content) == []
+
+
+@pytest.mark.parametrize(
+    "content, reason",
+    [
+        (f"{BASE}\nLABEL path=C:\\\\\n{ADD_URL}\n", "échappement final ambigu"),
+        (f"{BASE}\nLABEL p=\\\\\\\n{ADD_URL}\n", "échappement final ambigu"),
+        (f"# escape=`\n{BASE}\nLABEL n=v`\n{ADD_URL}\n", "directive de parseur"),
+        (f"  # escape=`\n{BASE}\n", "directive de parseur interdite"),
+        (f"# anything=x\n# escape=`\n{BASE}\n", "directive de parseur interdite"),
+        (f"# syntax=docker/dockerfile:1\n{BASE}\n", "directive de parseur interdite"),
+        (f'{BASE}\nCOPY <<"E\\OF" /x\nE\\OF\n', "délimiteur de heredoc non supporté"),
+    ],
+    ids=[
+        "double-antislash",
+        "triple-antislash",
+        "directive-escape",
+        "directive-indentee",
+        "directive-apres-directive-inconnue",
+        "directive-syntax",
+        "delimiteur-avec-echappement",
+    ],
+)
+def test_syntaxe_ambigue_refusee(tmp_path, content, reason):
+    errors = dockerfile_errors(tmp_path, content)
+    assert len(errors) == 1 and reason in errors[0]
 
 
 def test_heredoc_non_termine_refuse(tmp_path):

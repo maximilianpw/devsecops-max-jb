@@ -31,7 +31,10 @@ from pathlib import Path
 DIGEST_RE = re.compile(r"@sha256:[0-9a-f]{64}$")
 ACTION_SHA_RE = re.compile(r"^[^@\s]+@[0-9a-f]{40}$")
 REQUIREMENT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*==[A-Za-z0-9.!+_-]+$")
-DIRECTIVE_RE = re.compile(r"^#\s*([A-Za-z]+)\s*=\s*(\S+)\s*$")
+# Forme d'une directive de parseur (`# escape=`, `# syntax=`...), comme BuildKit.
+DIRECTIVE_RE = re.compile(r"^#\s*[A-Za-z][A-Za-z0-9_-]*\s*=")
+# Délimiteurs de heredoc acceptés : simples, éventuellement entre guillemets.
+HEREDOC_NAME_RE = re.compile(r"^(['\"]?)[A-Za-z0-9_.-]+\1$")
 HEREDOC_INSTRUCTIONS = {"RUN", "COPY", "ADD"}
 # Comme BuildKit : un mot shell (guillemets conservés) de la forme [fd]<<[-]nom.
 HEREDOC_RE = re.compile(r"^(\d*)<<(-?)([^<]*)$")
@@ -48,50 +51,60 @@ NO_NEW_PRIVILEGES = {
 
 
 def instructions(text):
-    """Renvoie les instructions (MOT-CLÉ, arguments) selon la syntaxe Dockerfile.
+    """Renvoie les instructions (MOT-CLÉ, arguments) d'un Dockerfile.
 
-    Comme BuildKit : BOM initial ignoré ; directives d'en-tête (`# escape=`) ;
-    une ligne de commentaire est retirée avant de résoudre les continuations
-    (un `\\` final ne la prolonge pas) ; lignes vides d'une continuation
-    ignorées ; mot-clé séparé par tout blanc ; ONBUILD déplié ; heredocs
-    reconnus seulement en forme shell de RUN, COPY et ADD, sur un mot shell
-    entier `[fd]<<[-]nom` (pas entre guillemets), délimiteur complet sans ses
-    guillemets. Lève ValueError sur un heredoc non terminé, comme BuildKit.
+    Lecture comme BuildKit : BOM initial ignoré ; ligne de commentaire retirée
+    avant de résoudre les continuations (un `\\` final ne la prolonge pas) ;
+    continuation concaténée sans séparateur (`A\\` puis `DD` donne `ADD`) ;
+    lignes vides d'une continuation ignorées ; mot-clé séparé par tout blanc ;
+    ONBUILD déplié ; heredocs reconnus seulement en forme shell de RUN, COPY
+    et ADD, sur un mot shell entier `[fd]<<[-]nom`, nom vide exclu.
+
+    Syntaxes ambiguës refusées (ValueError) plutôt qu'interprétées : directive
+    de parseur (`# escape=`, `# syntax=`, qui changent la lecture ou chargent
+    un frontend non épinglé), échappement final doublé (`\\\\`), délimiteur
+    de heredoc autre qu'un nom simple, heredoc non terminé.
     """
     lines = text.removeprefix("\ufeff").splitlines()
-    escape = "\\"
     for line in lines:
-        directive = DIRECTIVE_RE.match(line)
-        if not directive:
+        if not line.strip().startswith("#"):
             break
-        if directive.group(1).lower() == "escape":
-            escape = directive.group(2)
-    result, parts, index = [], [], 0
-    while index < len(lines) or parts:
-        line = lines[index].strip() if index < len(lines) else ""
+        if DIRECTIVE_RE.match(line.strip()):
+            raise ValueError(f"directive de parseur interdite : {line.strip()}")
+    result, logical, index = [], None, 0
+    while index < len(lines) or logical is not None:
+        raw = lines[index] if index < len(lines) else ""
         index += 1
-        if index <= len(lines) and (not line or line.startswith("#")):
+        stripped = raw.strip()
+        if index <= len(lines) and (not stripped or stripped.startswith("#")):
             continue
-        if line.endswith(escape):
-            parts.append(line[: -len(escape)])
+        body = raw.rstrip()
+        if body.endswith("\\\\"):
+            raise ValueError(f"échappement final ambigu : {stripped}")
+        part = body[:-1] if body.endswith("\\") else body
+        logical = part.lstrip() if logical is None else logical + part
+        if body.endswith("\\") and index < len(lines):
             continue
-        logical = " ".join(parts + [line]).strip()
-        parts = []
-        if not logical:
-            continue
-        keyword, args = split_instruction(logical)
-        if keyword == "ONBUILD":
-            keyword, args = split_instruction(args)
-        for strip_tabs, name in heredocs(keyword, args, escape):
-            while True:
-                if index >= len(lines):
-                    raise ValueError(f"heredoc {name!r} non terminé ({keyword} {args})")
-                data = lines[index]
-                index += 1
-                if (data.lstrip("\t") if strip_tabs else data) == name:
-                    break
-        result.append((keyword, args))
+        instruction, index = parse_instruction(logical, lines, index)
+        result.append(instruction)
+        logical = None
     return result
+
+
+def parse_instruction(logical, lines, index):
+    """Instruction logique -> ((MOT-CLÉ, arguments), index après ses heredocs)."""
+    keyword, args = split_instruction(logical)
+    if keyword == "ONBUILD":
+        keyword, args = split_instruction(args)
+    for strip_tabs, name in heredocs(keyword, args):
+        while True:
+            if index >= len(lines):
+                raise ValueError(f"heredoc {name!r} non terminé ({keyword} {args})")
+            data = lines[index]
+            index += 1
+            if (data.lstrip("\t") if strip_tabs else data) == name:
+                break
+    return (keyword, args), index
 
 
 def shell_words(line, escape="\\"):
@@ -141,7 +154,7 @@ def unquote(word, escape="\\"):
     return result
 
 
-def heredocs(keyword, args, escape="\\"):
+def heredocs(keyword, args):
     """Heredocs ouverts par une instruction : [(retrait des tabulations, nom)]."""
     if keyword not in HEREDOC_INSTRUCTIONS:
         return []
@@ -151,10 +164,13 @@ def heredocs(keyword, args, escape="\\"):
     except ValueError:
         pass
     found = []
-    for word in shell_words(args, escape):
+    for word in shell_words(args):
         match = HEREDOC_RE.match(word)
-        if match and match.group(3):
-            found.append((match.group(2) == "-", unquote(match.group(3), escape)))
+        if not match or not unquote(match.group(3)):
+            continue
+        if not HEREDOC_NAME_RE.match(match.group(3)):
+            raise ValueError(f"délimiteur de heredoc non supporté : {word}")
+        found.append((match.group(2) == "-", unquote(match.group(3))))
     return found
 
 

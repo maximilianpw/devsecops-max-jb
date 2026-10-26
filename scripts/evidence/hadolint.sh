@@ -10,7 +10,8 @@
 set -u
 PY=${PYTHON:-python3}
 C=scripts/ci/check_hadolint_policy.py
-B=$(sed -n "s/^FROM \([^ ]*\)$/\1/p" Dockerfile)
+# Instruction FROM de l'étape finale du Dockerfile (image épinglée par digest).
+B="FROM $(sed -n "s/^FROM \([^ ]*\)$/\1/p" Dockerfile)"
 echo "# date: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo "# $(hadolint --version)"
 echo "# cmd: hadolint --config .hadolint.yaml Dockerfile"
@@ -96,5 +97,12 @@ cmp delimiteur-numerique 'FROM scratch\nCOPY <<123 /x\nADD texte /y\n123\n\n'
 cmp delimiteur-entre-guillemets "FROM scratch\nCOPY <<'EOF-X' /x\nADD texte /y\nEOF-X\nADD absent /z\n"
 cmp descripteur 'FROM scratch AS u\nRUN cat 0<<EOF\nADD absent /y\nEOF\nFROM scratch\nADD absent2 /z\n'
 cmp non-termine 'FROM scratch\nCOPY <<EOF /x\nADD absent /y\n'
+cmp mot-cle-coupe 'FROM scratch\nA\\\nDD absent /x\n'
+cmp heredoc-nom-vide "FROM scratch\nCOPY <<'' /x\nADD absent /y\n\n"
+echo "# syntaxes ambiguës : check_pinning.py refuse au lieu d'interpréter"
+cmp double-antislash 'FROM scratch\nLABEL p=C:\\\\\nADD absent /x\n'
+cmp directive-escape '# escape=`\nFROM scratch\nLABEL n=v`\nADD absent /x\n'
+cmp directive-indentee '  # escape=`\nFROM scratch\nLABEL n=v`\nADD absent /x\n'
+cmp directive-apres-inconnue '# anything=x\n# escape=`\nFROM scratch\nLABEL n=v`\nADD absent /x\n'
 cmp bom '\xef\xbb\xbfFROM cgr.dev/chainguard/python:latest-dev AS mutable\n' --call=targets
 rm -rf "$w"
