@@ -1,4 +1,4 @@
-# date: 2026-10-26T10:37:13Z
+# date: 2026-10-26T10:45:36Z
 # Haskell Dockerfile Linter 2.15.1
 # cmd: hadolint --config .hadolint.yaml Dockerfile
 exit: 0
@@ -281,6 +281,22 @@ check_pinning: ['ADD interdit, utiliser COPY : ADD absent /y']
 buildkit: [1/1] ADD absent /x
 buildkit: erreur "/absent": not found
 check_pinning: ['Dockerfile illisible : échappement final ambigu : LABEL p=C:\\\\']
+## heredoc-expansion-non-supportee
+    FROM scratch AS u
+    RUN cat <<CMD ${#v}
+    FROM scratch
+    ADD absent /x/
+    CMD
+buildkit: erreur "/absent": not found
+check_pinning: ["Dockerfile illisible : ligne d'ouverture de heredoc non supportée : RUN cat <<CMD ${#v}"]
+## heredoc-guillemet-non-ferme
+    FROM scratch AS u
+    RUN cat <<CMD 'abc
+    FROM scratch
+    ADD absent /x/
+    CMD
+buildkit: erreur "/absent": not found
+check_pinning: ["Dockerfile illisible : ligne d'ouverture de heredoc non supportée : RUN cat <<CMD 'abc"]
 ## directive-escape
     # escape=`
     FROM scratch

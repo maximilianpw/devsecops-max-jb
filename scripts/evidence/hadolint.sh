@@ -101,6 +101,9 @@ cmp mot-cle-coupe 'FROM scratch\nA\\\nDD absent /x\n'
 cmp heredoc-nom-vide "FROM scratch\nCOPY <<'' /x\nADD absent /y\n\n"
 echo "# syntaxes ambiguës : check_pinning.py refuse au lieu d'interpréter"
 cmp double-antislash 'FROM scratch\nLABEL p=C:\\\\\nADD absent /x\n'
+# shellcheck disable=SC2016
+cmp heredoc-expansion-non-supportee 'FROM scratch AS u\nRUN cat <<CMD ${#v}\nFROM scratch\nADD absent /x/\nCMD\n'
+cmp heredoc-guillemet-non-ferme "FROM scratch AS u\nRUN cat <<CMD 'abc\nFROM scratch\nADD absent /x/\nCMD\n"
 # Backticks littéraux : caractère d'échappement des directives testées.
 # shellcheck disable=SC2016
 cmp directive-escape '# escape=`\nFROM scratch\nLABEL n=v`\nADD absent /x\n'
