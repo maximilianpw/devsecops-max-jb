@@ -26,6 +26,7 @@ import argparse
 import json
 import re
 import sys
+import unicodedata
 from pathlib import Path
 
 DIGEST_RE = re.compile(r"@sha256:[0-9a-f]{64}$")
@@ -35,6 +36,10 @@ REQUIREMENT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*==[A-Za-z0-9.!+_-]+$")
 DIRECTIVE_RE = re.compile(r"^#\s*[A-Za-z][A-Za-z0-9_-]*\s*=")
 # Délimiteurs de heredoc acceptés : simples, éventuellement entre guillemets.
 HEREDOC_NAME_RE = re.compile(r"^(['\"]?)[A-Za-z0-9_.-]+\1$")
+# Seuls blancs reconnus : espace et tabulation, comme BuildKit.
+BLANKS = " \t"
+# Contrôle, séparateurs de ligne/paragraphe, espaces Unicode, formatage.
+FORBIDDEN_CATEGORIES = {"Cc", "Zl", "Zp", "Zs", "Cf"}
 HEREDOC_INSTRUCTIONS = {"RUN", "COPY", "ADD"}
 # Comme BuildKit : un mot shell (guillemets conservés) de la forme [fd]<<[-]nom.
 HEREDOC_RE = re.compile(r"^(\d*)<<(-?)([^<]*)$")
@@ -65,7 +70,11 @@ def instructions(text):
     un frontend non épinglé), échappement final doublé (`\\\\`), délimiteur
     de heredoc autre qu'un nom simple, heredoc non terminé.
     """
-    lines = text.removeprefix("\ufeff").splitlines()
+    text = text.removeprefix("\ufeff")
+    check_characters(text)
+    # Découpage sur LF uniquement, comme BuildKit (splitlines() couperait aussi
+    # sur \v, \f, U+2028...) ; les autres séparateurs sont refusés ci-dessus.
+    lines = text.split("\n")
     for line in lines:
         if not line.strip().startswith("#"):
             break
@@ -75,20 +84,33 @@ def instructions(text):
     while index < len(lines) or logical is not None:
         raw = lines[index] if index < len(lines) else ""
         index += 1
-        stripped = raw.strip()
+        stripped = raw.strip(BLANKS)
         if index <= len(lines) and (not stripped or stripped.startswith("#")):
             continue
-        body = raw.rstrip()
+        body = raw.rstrip(BLANKS)
         if body.endswith("\\\\"):
             raise ValueError(f"échappement final ambigu : {stripped}")
         part = body[:-1] if body.endswith("\\") else body
-        logical = part.lstrip() if logical is None else logical + part
+        logical = part.lstrip(BLANKS) if logical is None else logical + part
         if body.endswith("\\") and index < len(lines):
             continue
         instruction, index = parse_instruction(logical, lines, index)
         result.append(instruction)
         logical = None
     return result
+
+
+def check_characters(text):
+    """Refuse les caractères de contrôle et d'espacement autres que espace,
+    tabulation et LF : Python et BuildKit ne les traitent pas de la même façon
+    (fin de ligne, espace avant une continuation). CR compris (fins de ligne
+    Windows refusées)."""
+    for number, line in enumerate(text.split("\n"), 1):
+        for char in line:
+            category = unicodedata.category(char)
+            if char not in BLANKS and category in FORBIDDEN_CATEGORIES:
+                code = f"U+{ord(char):04X}"
+                raise ValueError(f"caractère {code} non autorisé ligne {number}")
 
 
 def parse_instruction(logical, lines, index):
@@ -204,8 +226,9 @@ def check_dockerfile(path):
     args = {}
     stages = set()
     try:
-        parsed = instructions(Path(path).read_text(encoding="utf-8"))
-    except ValueError as error:
+        # Lecture en octets : read_text() convertirait \r en \n sans le dire.
+        parsed = instructions(Path(path).read_bytes().decode("utf-8"))
+    except ValueError as error:  # UnicodeDecodeError compris
         return [f"{path}: Dockerfile illisible : {error}"]
     for keyword, rest in parsed:
         if keyword == "ARG":
