@@ -111,6 +111,7 @@ jobs:
       image-id: ${{ needs.build-amd64.outputs.image-id }}
       archive-sha256: ${{ needs.build-amd64.outputs.archive-sha256 }}
       artifact-id: ${{ needs.build-amd64.outputs.artifact-id }}
+      run-attempt: ${{ needs.build-amd64.outputs.run-attempt }}
   scan-arm64:
     needs: build-arm64
     permissions:
@@ -122,6 +123,7 @@ jobs:
       image-id: ${{ needs.build-arm64.outputs.image-id }}
       archive-sha256: ${{ needs.build-arm64.outputs.archive-sha256 }}
       artifact-id: ${{ needs.build-arm64.outputs.artifact-id }}
+      run-attempt: ${{ needs.build-arm64.outputs.run-attempt }}
   build:
     name: BuildKit + Dive
     if: ${{ always() }}
@@ -203,12 +205,14 @@ jobs:
         env:
           EXPECTED_IMAGE_ID: ${{ needs.build-amd64.outputs.image-id }}
           EXPECTED_SHA256: ${{ needs.build-amd64.outputs.archive-sha256 }}
+          EXPECTED_RUN_ATTEMPT: ${{ needs.build-amd64.outputs.run-attempt }}
           EXPECTED_PLATFORM: linux/amd64
         run: python3 scripts/ci/image_archive.py verify dist/amd64
       - name: Verify arm64 archive
         env:
           EXPECTED_IMAGE_ID: ${{ needs.build-arm64.outputs.image-id }}
           EXPECTED_SHA256: ${{ needs.build-arm64.outputs.archive-sha256 }}
+          EXPECTED_RUN_ATTEMPT: ${{ needs.build-arm64.outputs.run-attempt }}
           EXPECTED_PLATFORM: linux/arm64
         run: python3 scripts/ci/image_archive.py verify dist/arm64
       - run: scripts/ci/install_tools.sh crane

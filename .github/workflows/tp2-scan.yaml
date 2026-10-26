@@ -17,6 +17,9 @@ on:
       artifact-id:
         type: string
         required: true
+      run-attempt:
+        type: string
+        required: true
 permissions: {}
 jobs:
   scan:
@@ -27,6 +30,7 @@ jobs:
       IMAGE: ${{ inputs.image }}
       EXPECTED_IMAGE_ID: ${{ inputs.image-id }}
       EXPECTED_SHA256: ${{ inputs.archive-sha256 }}
+      EXPECTED_RUN_ATTEMPT: ${{ inputs.run-attempt }}
       EXPECTED_PLATFORM: linux/${{ inputs.arch }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
