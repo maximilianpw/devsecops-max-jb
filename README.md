@@ -149,7 +149,10 @@ dépendances de Flask.
 Contraintes vérifiées automatiquement par la CI
 ([`scripts/ci/check_pinning.py`](scripts/ci/check_pinning.py)) :
 
-- chaque `FROM` du Dockerfile est épinglé par `@sha256:` ;
+- chaque `FROM` du Dockerfile est épinglé par `@sha256:`, et aucune
+  instruction `ADD` n'est acceptée ;
+- chaque ligne de `requirements.txt` et `requirements-dev.txt` est de la
+  forme `nom==version` ;
 - PostgreSQL utilise `cgr.dev/chainguard/postgres@sha256:…` et ne publie
   aucun port ;
 - l'API utilise `image: ${API_IMAGE:-flask-api:local}` ;
@@ -351,29 +354,43 @@ Hadolint + pinning ───────┘                   └─ Compose + p
 
   | Règle d'équipe | Codes forcés en `error` |
   | --- | --- |
-  | R1 Images de base : registre `cgr.dev` seul, tag explicite, jamais `latest` | DL3026, DL3006, DL3007 |
+  | R1 Images de base : registre `cgr.dev` seul, tag ou digest explicite, `latest` seul refusé | DL3026, DL3006, DL3007 |
   | R2 Exécution sans privilèges | DL3002, DL3004 |
   | R3 Shell robuste | DL4006, SC2086, DL3003, DL4001 |
-  | R4 Copie maîtrisée | DL3020, DL3021, DL3022, DL3045, DL3000 |
-  | R5 Dépendances Python épinglées, sans cache pip | DL3013, DL3042 |
-  | R6 Démarrage prévisible (forme JSON, une seule instruction) | DL3025, DL4003, DL4004 |
+  | R4 Copie maîtrisée (`COPY` uniquement) | DL3020, DL3021, DL3022, DL3045, DL3000 |
+  | R5 Dépendances Python versionnées, sans cache pip | DL3013, DL3042 |
+  | R6 Démarrage prévisible (forme JSON, au plus un `CMD` et un `ENTRYPOINT` par étape) | DL3025, DL4003, DL4004 |
 
-  Seuil `failure-threshold: info` : toute autre alerte Hadolint, même
-  `info`, bloque aussi. `ignored: []` et `disable-ignore-pragma: true` :
-  aucune exception possible, ni dans la configuration, ni par commentaire
-  `# hadolint ignore=` dans le Dockerfile.
-  Hadolint ignore sans erreur un code mal saisi : le script
+  Seuil `failure-threshold: style` : toute autre alerte Hadolint, quel que
+  soit son niveau (jusqu'à `style`), bloque aussi. `ignored: []` et
+  `disable-ignore-pragma: true` : aucune exception possible, ni dans la
+  configuration, ni par commentaire `# hadolint ignore=` dans le Dockerfile.
+
+  Hadolint ignore sans erreur une clé ou un code mal saisi. Le script
   [`check_hadolint_policy.py`](scripts/ci/check_hadolint_policy.py), exécuté
-  en CI, rejoue chaque règle d'équipe sur un Dockerfile fautif et exige
-  l'échec en `error`, vérifie que le seuil `info` et le refus des pragmas sont
-  effectifs, et que la liste testée correspond exactement à `.hadolint.yaml`.
-  Des mutations de la configuration (règle retirée, code mal saisi, pragma
-  autorisé, seuil relevé) font bien échouer ce contrôle
+  en CI :
+  - lit `.hadolint.yaml` dans un format strict (ligne non reconnue, code mal
+    formé ou entre guillemets refusés) et en vérifie les invariants : seuil
+    `style`, `ignored: []`, pragmas désactivés, `cgr.dev` seul registre,
+    surcharges uniquement en `error` ;
+  - exige que les règles forcées en `error` soient exactement celles testées ;
+  - rejoue chaque règle sur un Dockerfile qui ne viole qu'elle et exige
+    cette seule alerte, en `error`, avec échec de Hadolint ;
+  - vérifie que le seuil `style` (DL3048) et le refus des pragmas sont
+    effectifs.
+
+  Douze mutations de la configuration (règle retirée, ajoutée sans test ou
+  entre guillemets, code ou clé mal saisis, pragmas autorisés, seuil relevé,
+  règle désactivée, registre ajouté, surcharge hors `error`, clé dupliquée)
+  font toutes échouer ce contrôle
   ([`evidence/after/hadolint.txt`](evidence/after/hadolint.txt)).
-  Limites : Hadolint laisse passer un tag mouvant du registre autorisé
-  (`cgr.dev/chainguard/python:latest-dev`) et un conteneur root sans ligne
-  `USER` : le digest est donc exigé par `check_pinning.py`, et l'utilisateur
-  vérifié par inspection de l'image.
+
+  Limites de Hadolint, couvertes ailleurs : un tag sans digest du registre
+  autorisé (`cgr.dev/chainguard/python:latest-dev`) et `ADD` d'une URL ou
+  d'une archive passent Hadolint, mais sont refusés par `check_pinning.py` ;
+  DL3013 accepte `Flask>=3` et ne lit pas `-r requirements.txt`, d'où
+  l'exigence `==` de `check_pinning.py` ; un conteneur sans ligne `USER`
+  passe aussi, l'utilisateur est vérifié par inspection de l'image.
 - **Une seule image** : construite une fois (BuildKit, `linux/amd64`, sans
   attestations), exportée par `docker save`, transmise en artefact. Chaque job
   consommateur vérifie le SHA256 de l'archive puis l'Image ID avant usage ;
@@ -471,9 +488,9 @@ par [`scripts/evidence/regenerate.sh`](scripts/evidence/regenerate.sh).
 | --- | --- | --- |
 | Flake8 | `flake8 --config=.flake8 app.py test_app.py tests scripts` (flake8 7.4.1, Python 3.15) | 0 violation |
 | Tests unitaires | `pytest -m "not integration"` (pytest 9.1.1, Python 3.15) | 6 passed |
-| Hadolint | `hadolint --config .hadolint.yaml Dockerfile` (2.15.1) | 0 alerte, y compris au seuil `info` |
-| Politique Hadolint | `scripts/ci/check_hadolint_policy.py` (2.15.1) | 19 règles d'équipe bloquantes en `error`, seuil `info` et refus des pragmas effectifs |
-| Pinning | `scripts/ci/check_pinning.py` | Dockerfile, Compose et actions conformes |
+| Hadolint | `hadolint --config .hadolint.yaml Dockerfile` (2.15.1) | 0 alerte, y compris au seuil `style` |
+| Politique Hadolint | `scripts/ci/check_hadolint_policy.py` (2.15.1) | configuration conforme ; 19 règles d'équipe bloquantes en `error` ; seuil `style` et refus des pragmas effectifs |
+| Pinning | `scripts/ci/check_pinning.py` | Dockerfile (sans `ADD`), Compose, `requirements*.txt` (`==`) et actions conformes |
 | Dive ≥ 80 % | `dive --ci --ci-config .dive-ci` (0.13.1) | PASS : 99,72 %, 0,50 % d'octets gaspillés |
 | Trivy image | gate HIGH/CRITICAL corrigibles (0.75.0) | 0 ; rapport complet : 0 CVE détectée |
 | Trivy dépendances | `trivy fs` (détecte `requirements.txt`) | 0 |

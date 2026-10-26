@@ -1,10 +1,11 @@
-# date: 2026-10-26T09:27:35Z
+# date: 2026-10-26T09:39:10Z
 # Haskell Dockerfile Linter 2.15.1
 # cmd: hadolint --config .hadolint.yaml Dockerfile
 exit: 0
 
 # cmd: python3 scripts/ci/check_hadolint_policy.py
-# règles d'équipe R1-R6 rejouées sur des Dockerfiles fautifs (non versionnés)
+# format et invariants de .hadolint.yaml, puis règles d'équipe R1-R6 rejouées
+# sur des Dockerfiles qui ne violent chacun que la règle visée (non versionnés)
 DL3006: error, bloquant
 DL3007: error, bloquant
 DL3026: error, bloquant
@@ -24,41 +25,109 @@ DL3042: error, bloquant
 DL3025: error, bloquant
 DL4003: error, bloquant
 DL4004: error, bloquant
-Politique Hadolint OK : Dockerfile sans alerte ; 19 règles d'équipe bloquantes en error ; seuil info effectif ; pragma ignore sans effet.
+Politique Hadolint OK : configuration conforme ; Dockerfile sans alerte ; 19 règles d'équipe bloquantes en error ; seuil style effectif ; pragma ignore sans effet.
 exit: 0
 
 # mutations de .hadolint.yaml (copie temporaire) : le contrôle doit échouer
-## sed 's/    - DL3025.*//'
+## règle d'équipe retirée (DL3025)
 DL3025 testée mais absente de override.error (.hadolint.yaml)
-DL3025 : DL3025 attendu en error, alertes obtenues : DL3025/warning
+DL3025 : seule DL3025/error attendue, alertes obtenues : DL3025/warning
 exit: 1
-## sed 's/DL3042/DL3O42/'
+## code mal saisi (DL3O42)
+.hadolint.yaml: code invalide dans override.error : DL3O42
+DL3O42 forcée en error dans .hadolint.yaml mais non testée
 DL3042 testée mais absente de override.error (.hadolint.yaml)
-DL3042 : DL3042 attendu en error, alertes obtenues : DL3042/warning
+DL3042 : seule DL3042/error attendue, alertes obtenues : DL3042/warning
 exit: 1
-## sed 's/disable-ignore-pragma: true/disable-ignore-pragma: false/'
+## règle ajoutée entre guillemets
+.hadolint.yaml: code invalide dans override.error : 'DL3008'
+'DL3008' forcée en error dans .hadolint.yaml mais non testée
+exit: 1
+## règle ajoutée sans cas de test
+DL3008 forcée en error dans .hadolint.yaml mais non testée
+exit: 1
+## pragmas autorisés
+.hadolint.yaml: disable-ignore-pragma vaut 'false', attendu 'true'
 pragma : Hadolint n'a pas échoué (attendu : DL3020 en error)
 exit: 1
-## sed 's/failure-threshold: info/failure-threshold: warning/'
-seuil : Hadolint n'a pas échoué (attendu : DL3059 en info)
+## clé mal saisie
+.hadolint.yaml: clé inattendue : disable-ignore-pragmas
+.hadolint.yaml: disable-ignore-pragma vaut None, attendu 'true'
+pragma : Hadolint n'a pas échoué (attendu : DL3020 en error)
+exit: 1
+## seuil relevé à info
+.hadolint.yaml: failure-threshold vaut 'info', attendu 'style'
+seuil : Hadolint n'a pas échoué (attendu : DL3048 en style)
+exit: 1
+## règle désactivée (forme en ligne)
+.hadolint.yaml: ignored vaut '[DL3008]', attendu []
+exit: 1
+## règle désactivée (forme liste)
+.hadolint.yaml: ignored vaut ['DL3008'], attendu []
+exit: 1
+## registre supplémentaire
+.hadolint.yaml: trustedRegistries vaut ['cgr.dev', 'docker.io'], attendu ['cgr.dev']
+exit: 1
+## override hors error
+.hadolint.yaml: override.warning interdit (règles d'équipe en error)
+exit: 1
+## clé dupliquée
+.hadolint.yaml:64: clé ignored dupliquée
+DL3006 : seule DL3006/error attendue, alertes obtenues : DL3006/warning
+DL3007 : seule DL3007/error attendue, alertes obtenues : DL3007/warning
+DL3026 : Hadolint n'a pas échoué (attendu : DL3026 en error)
+DL3002 : seule DL3002/error attendue, alertes obtenues : DL3002/warning
+DL4006 : seule DL4006/error attendue, alertes obtenues : DL4006/warning
+SC2086 : seule SC2086/error attendue, alertes obtenues : SC2086/info
+DL3003 : seule DL3003/error attendue, alertes obtenues : DL3003/warning
+DL4001 : seule DL4001/error attendue, alertes obtenues : DL4001/warning
+DL3022 : seule DL3022/error attendue, alertes obtenues : DL3022/warning
+DL3045 : seule DL3045/error attendue, alertes obtenues : DL3045/warning
+DL3013 : seule DL3013/error attendue, alertes obtenues : DL3013/warning
+DL3042 : seule DL3042/error attendue, alertes obtenues : DL3042/warning
+DL3025 : seule DL3025/error attendue, alertes obtenues : DL3025/warning
+DL4003 : seule DL4003/error attendue, alertes obtenues : DL4003/warning
+seuil : Hadolint n'a pas échoué (attendu : DL3048 en style)
+pragma : Hadolint n'a pas échoué (attendu : DL3020 en error)
 exit: 1
 
-# limites : cas que Hadolint laisse passer
+# limites de Hadolint et contrôle qui les couvre
 ## tag-mouvant
     FROM cgr.dev/chainguard/python:latest-dev
     USER 65532
-exit: 0
+hadolint exit: 0
+1 violation(s) de pinning ou de durcissement.
+::error::tag-mouvant: image non épinglée par digest : cgr.dev/chainguard/python:latest-dev
+check_pinning exit: 1
 ## tag-version
     FROM cgr.dev/chainguard/python:3.14
     USER 65532
-exit: 0
+hadolint exit: 0
+1 violation(s) de pinning ou de durcissement.
+::error::tag-version: image non épinglée par digest : cgr.dev/chainguard/python:3.14
+check_pinning exit: 1
+## add-url
+    FROM cgr.dev/chainguard/python@sha256:b6248c85ba9b97e1e61b30197f309cc4d21661f889fefa5268f0a7bc530dad46
+    ADD https://example.com/app.tar.gz /app/
+    USER 65532
+hadolint exit: 0
+1 violation(s) de pinning ou de durcissement.
+::error::add-url: ADD interdit, utiliser COPY : ADD https://example.com/app.tar.gz /app/
+check_pinning exit: 1
 ## sans-user
     FROM cgr.dev/chainguard/python@sha256:b6248c85ba9b97e1e61b30197f309cc4d21661f889fefa5268f0a7bc530dad46
     RUN ["true"]
-exit: 0
-# -> tag sans digest : refusé par check_pinning.py ; USER : vérifié par inspection de l'image (65532:65532)
-## hors-registre (Dockerfile initial : Docker Hub)
+hadolint exit: 0
+# -> USER : vérifié par inspection de l'image (65532:65532, evidence/after/image.txt)
+## hors-registre
     FROM python:3.10-slim
     USER 65532
 hors-registre:1 DL3026 error: Use only an allowed registry in the FROM image
-exit: 1
+hadolint exit: 1
+
+# dépendances Python : DL3013 accepte une contrainte, check_pinning.py exige ==
+## requirements.txt
+    Flask>=3
+1 violation(s) de pinning ou de durcissement.
+::error::requirements.txt:1: dépendance non épinglée (==) : Flask>=3
+check_pinning exit: 1

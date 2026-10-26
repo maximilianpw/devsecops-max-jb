@@ -1,11 +1,13 @@
 # Politique Hadolint de l'équipe, appliquée par le job CI « Hadolint + pinning » :
 #   hadolint --config .hadolint.yaml Dockerfile
-# Chaque règle d'équipe (R1 à R6) est vérifiée sur un Dockerfile fautif par
-# scripts/ci/check_hadolint_policy.py : une règle mal orthographiée ici serait
-# ignorée silencieusement par Hadolint, ce contrôle la fait échouer.
+# Hadolint ignore sans erreur une clé ou un code de règle mal saisi : le script
+# scripts/ci/check_hadolint_policy.py lit ce fichier dans un format strict
+# (toute ligne non reconnue est refusée), vérifie les invariants ci-dessous et
+# rejoue chaque règle d'équipe (R1 à R6) sur un Dockerfile fautif.
 
-# Tolérance zéro : toute alerte, y compris de niveau info ou style, bloque le build.
-failure-threshold: info
+# Tolérance zéro : toute alerte, quel que soit son niveau (error, warning, info,
+# style), fait échouer le lint.
+failure-threshold: style
 
 # Aucune exception : pas de règle désactivée, et les commentaires
 # « # hadolint ignore=... » dans le Dockerfile sont sans effet.
@@ -21,10 +23,10 @@ trustedRegistries:
 # par défaut et restent bloquantes via failure-threshold.
 override:
   error:
-    # R1 - Images de base : tag explicite, jamais « latest ».
+    # R1 - Images de base : tag ou digest explicite, « latest » seul refusé.
     # Le digest @sha256 est exigé par check_pinning.py (Hadolint ne sait pas le faire).
-    - DL3006  # FROM sans tag
-    - DL3007  # FROM ...:latest
+    - DL3006  # FROM sans tag ni digest
+    - DL3007  # FROM ...:latest sans digest
     - DL3026  # registre hors liste trustedRegistries
 
     # R2 - Exécution sans privilèges.
@@ -39,20 +41,23 @@ override:
     - DL3003  # cd au lieu de WORKDIR
     - DL4001  # wget et curl mélangés
 
-    # R4 - Copie maîtrisée : pas de téléchargement ni d'extraction implicites,
-    # chemins et étapes sans ambiguïté.
-    - DL3020  # ADD au lieu de COPY
+    # R4 - Copie maîtrisée : COPY uniquement, chemins et étapes sans ambiguïté.
+    # DL3020 tolère ADD pour une URL ou une archive : check_pinning.py refuse
+    # donc toute instruction ADD.
+    - DL3020  # ADD d'un fichier ou répertoire local
     - DL3021  # COPY de plusieurs sources vers une cible sans « / »
     - DL3022  # COPY --from vers une étape non déclarée
     - DL3045  # COPY vers un chemin relatif sans WORKDIR
     - DL3000  # WORKDIR relatif
 
-    # R5 - Dépendances Python : versions épinglées, aucun cache pip dans l'image.
+    # R5 - Dépendances Python : aucun paquet sans version, aucun cache pip dans
+    # l'image. DL3013 accepte une contrainte (>=) et ne lit pas les fichiers -r :
+    # check_pinning.py exige donc « nom==version » dans requirements*.txt.
     - DL3013  # pip install d'un paquet sans version
     - DL3042  # pip install sans --no-cache-dir
 
     # R6 - Démarrage prévisible : forme JSON (signaux reçus par le processus
-    # applicatif, pas par un shell), une seule instruction de démarrage.
+    # applicatif, pas par un shell), au plus un CMD et un ENTRYPOINT par étape.
     - DL3025  # CMD / ENTRYPOINT en forme shell
     - DL4003  # plusieurs CMD
     - DL4004  # plusieurs ENTRYPOINT
