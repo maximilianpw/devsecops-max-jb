@@ -31,6 +31,9 @@ from pathlib import Path
 DIGEST_RE = re.compile(r"@sha256:[0-9a-f]{64}$")
 ACTION_SHA_RE = re.compile(r"^[^@\s]+@[0-9a-f]{40}$")
 REQUIREMENT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*==[A-Za-z0-9.!+_-]+$")
+DIRECTIVE_RE = re.compile(r"^#\s*([A-Za-z]+)\s*=\s*(\S+)\s*$")
+HEREDOC_INSTRUCTIONS = {"RUN", "COPY", "ADD"}
+HEREDOC_RE = re.compile(r"<<(-?)([\"']?)([A-Za-z_][A-Za-z0-9_]*)\2")
 DOCKER_ACTION_RE = re.compile(r"^docker://[^@\s]+@sha256:[0-9a-f]{64}$")
 CHAINGUARD_POSTGRES = "cgr.dev/chainguard/postgres"
 API_SERVICE = "api-python"
@@ -43,28 +46,68 @@ NO_NEW_PRIVILEGES = {
 }
 
 
-def logical_lines(text):
-    """Fusionne les continuations de ligne et retire les commentaires."""
-    text = re.sub(r"\\\r?\n", " ", text)
-    for line in text.splitlines():
-        line = line.strip()
-        if line and not line.startswith("#"):
-            yield line
+def instructions(text):
+    """Renvoie les instructions (MOT-CLÉ, arguments) selon la syntaxe Dockerfile.
+
+    Comme Docker : les directives d'en-tête (`# escape=`) fixent le caractère
+    de continuation ; une ligne de commentaire est retirée avant de résoudre
+    les continuations (un `\\` final ne la prolonge pas) ; les lignes vides
+    d'une continuation sont ignorées ; le contenu des heredocs (`<<EOF`) n'est
+    pas une instruction ; le mot-clé est séparé par tout blanc ; ONBUILD est
+    déplié.
+    """
+    lines = text.splitlines()
+    escape = "\\"
+    for line in lines:
+        directive = DIRECTIVE_RE.match(line)
+        if not directive:
+            break
+        if directive.group(1).lower() == "escape":
+            escape = directive.group(2)
+    result, parts, index = [], [], 0
+    while index < len(lines) or parts:
+        line = lines[index].strip() if index < len(lines) else ""
+        index += 1
+        if index <= len(lines) and (not line or line.startswith("#")):
+            continue
+        if line.endswith(escape):
+            parts.append(line[: -len(escape)])
+            continue
+        logical = " ".join(parts + [line]).strip()
+        parts = []
+        if not logical:
+            continue
+        keyword, args = split_instruction(logical)
+        if keyword == "ONBUILD":
+            keyword, args = split_instruction(args)
+        if keyword in HEREDOC_INSTRUCTIONS:
+            for strip_tabs, _, delimiter in HEREDOC_RE.findall(args):
+                while index < len(lines):
+                    data = lines[index]
+                    index += 1
+                    if (data.lstrip("\t") if strip_tabs else data) == delimiter:
+                        break
+        result.append((keyword, args))
+    return result
+
+
+def split_instruction(logical):
+    """Sépare le mot-clé (en majuscules) de ses arguments, sur tout blanc."""
+    keyword, *rest = re.split(r"\s+", logical.strip(), maxsplit=1)
+    return keyword.upper(), rest[0] if rest else ""
 
 
 def check_dockerfile(path):
     errors = []
     args = {}
     stages = set()
-    for line in logical_lines(Path(path).read_text()):
-        keyword, _, rest = line.partition(" ")
-        keyword = keyword.upper()
+    for keyword, rest in instructions(Path(path).read_text()):
         if keyword == "ARG":
             name, _, default = rest.strip().partition("=")
             args[name.strip()] = default.strip().strip("\"'")
             continue
         if keyword == "ADD":
-            errors.append(f"{path}: ADD interdit, utiliser COPY : {line}")
+            errors.append(f"{path}: ADD interdit, utiliser COPY : ADD {rest}")
             continue
         if keyword != "FROM":
             continue

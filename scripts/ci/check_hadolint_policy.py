@@ -107,7 +107,9 @@ def read_config(path):
         elif (match := SUB_RE.match(line)) and key == "override":
             sub = match.group(1)
             config["override"] = config["override"] or {}
-            config["override"].setdefault(sub, [])
+            if sub in config["override"]:
+                errors.append(f"{where}: override.{sub} dupliquée")
+            config["override"][sub] = []
         elif match := ITEM_RE.match(line):
             nested, item = len(match.group(1)) == 4, match.group(2)
             if key == "override" and nested and sub:
@@ -169,7 +171,7 @@ def check_case(config, workdir, name, content, code, level="error"):
     path = Path(workdir) / name
     path.write_text(content)
     returncode, findings = hadolint(config, path)
-    found = sorted({(f["code"], f["level"]) for f in findings})
+    found = sorted((f["code"], f["level"]) for f in findings)
     if returncode == 0:
         return [f"{name} : Hadolint n'a pas échoué (attendu : {code} en {level})"]
     if found != [(code, level)]:

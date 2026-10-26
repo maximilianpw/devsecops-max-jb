@@ -150,7 +150,10 @@ Contraintes vérifiées automatiquement par la CI
 ([`scripts/ci/check_pinning.py`](scripts/ci/check_pinning.py)) :
 
 - chaque `FROM` du Dockerfile est épinglé par `@sha256:`, et aucune
-  instruction `ADD` n'est acceptée ;
+  instruction `ADD` n'est acceptée ; le Dockerfile est lu selon sa syntaxe
+  (commentaires retirés avant les continuations, directive `# escape=`,
+  heredocs, mot-clé séparé par tout blanc, `ONBUILD`), comportement comparé
+  à BuildKit dans [`evidence/after/hadolint.txt`](evidence/after/hadolint.txt) ;
 - chaque ligne de `requirements.txt` et `requirements-dev.txt` est de la
   forme `nom==version` ;
 - PostgreSQL utilise `cgr.dev/chainguard/postgres@sha256:…` et ne publie
@@ -379,10 +382,10 @@ Hadolint + pinning ───────┘                   └─ Compose + p
   - vérifie que le seuil `style` (DL3048) et le refus des pragmas sont
     effectifs.
 
-  Douze mutations de la configuration (règle retirée, ajoutée sans test ou
+  Treize mutations de la configuration (règle retirée, ajoutée sans test ou
   entre guillemets, code ou clé mal saisis, pragmas autorisés, seuil relevé,
-  règle désactivée, registre ajouté, surcharge hors `error`, clé dupliquée)
-  font toutes échouer ce contrôle
+  règle désactivée, registre ajouté, surcharge hors `error`, clé ou sous-clé
+  dupliquée) font toutes échouer ce contrôle
   ([`evidence/after/hadolint.txt`](evidence/after/hadolint.txt)).
 
   Limites de Hadolint, couvertes ailleurs : un tag sans digest du registre
@@ -487,7 +490,7 @@ par [`scripts/evidence/regenerate.sh`](scripts/evidence/regenerate.sh).
 | Contrôle | Commande | Résultat |
 | --- | --- | --- |
 | Flake8 | `flake8 --config=.flake8 app.py test_app.py tests scripts` (flake8 7.4.1, Python 3.15) | 0 violation |
-| Tests unitaires | `pytest -m "not integration"` (pytest 9.1.1, Python 3.15) | 6 passed |
+| Tests unitaires | `pytest -m "not integration"` (pytest 9.1.1, Python 3.15) | 39 passed : 6 pour l'application, 33 pour les contrôles de CI ([`tests/test_ci_scripts.py`](tests/test_ci_scripts.py) : contournements de `check_pinning.py` et mutations de `.hadolint.yaml`) ; en CI, le cas qui exécute Hadolint est ignoré dans ce job (Hadolint n'y est pas installé), son contrôle est fait par `check_hadolint_policy.py` |
 | Hadolint | `hadolint --config .hadolint.yaml Dockerfile` (2.15.1) | 0 alerte, y compris au seuil `style` |
 | Politique Hadolint | `scripts/ci/check_hadolint_policy.py` (2.15.1) | configuration conforme ; 19 règles d'équipe bloquantes en `error` ; seuil `style` et refus des pragmas effectifs |
 | Pinning | `scripts/ci/check_pinning.py` | Dockerfile (sans `ADD`), Compose, `requirements*.txt` (`==`) et actions conformes |

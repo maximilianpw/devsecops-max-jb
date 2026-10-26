@@ -1,4 +1,4 @@
-# date: 2026-10-26T09:39:10Z
+# date: 2026-10-26T09:48:02Z
 # Haskell Dockerfile Linter 2.15.1
 # cmd: hadolint --config .hadolint.yaml Dockerfile
 exit: 0
@@ -90,6 +90,44 @@ DL4003 : seule DL4003/error attendue, alertes obtenues : DL4003/warning
 seuil : Hadolint n'a pas échoué (attendu : DL3048 en style)
 pragma : Hadolint n'a pas échoué (attendu : DL3020 en error)
 exit: 1
+## sous-clé override dupliquée
+.hadolint.yaml:64: override.error dupliquée
+DL3000 testée mais absente de override.error (.hadolint.yaml)
+DL3002 testée mais absente de override.error (.hadolint.yaml)
+DL3003 testée mais absente de override.error (.hadolint.yaml)
+DL3004 testée mais absente de override.error (.hadolint.yaml)
+DL3006 testée mais absente de override.error (.hadolint.yaml)
+DL3007 testée mais absente de override.error (.hadolint.yaml)
+DL3013 testée mais absente de override.error (.hadolint.yaml)
+DL3020 testée mais absente de override.error (.hadolint.yaml)
+DL3021 testée mais absente de override.error (.hadolint.yaml)
+DL3022 testée mais absente de override.error (.hadolint.yaml)
+DL3025 testée mais absente de override.error (.hadolint.yaml)
+DL3026 testée mais absente de override.error (.hadolint.yaml)
+DL3042 testée mais absente de override.error (.hadolint.yaml)
+DL3045 testée mais absente de override.error (.hadolint.yaml)
+DL4001 testée mais absente de override.error (.hadolint.yaml)
+DL4003 testée mais absente de override.error (.hadolint.yaml)
+DL4004 testée mais absente de override.error (.hadolint.yaml)
+DL4006 testée mais absente de override.error (.hadolint.yaml)
+SC2086 testée mais absente de override.error (.hadolint.yaml)
+DL3006 : seule DL3006/error attendue, alertes obtenues : DL3006/warning
+DL3007 : seule DL3007/error attendue, alertes obtenues : DL3007/warning
+DL3026 : Hadolint n'a pas échoué (attendu : DL3026 en error)
+DL3002 : seule DL3002/error attendue, alertes obtenues : DL3002/warning
+DL4006 : seule DL4006/error attendue, alertes obtenues : DL4006/warning
+SC2086 : seule SC2086/error attendue, alertes obtenues : SC2086/info
+DL3003 : seule DL3003/error attendue, alertes obtenues : DL3003/warning
+DL4001 : seule DL4001/error attendue, alertes obtenues : DL4001/warning
+DL3022 : seule DL3022/error attendue, alertes obtenues : DL3022/warning
+DL3045 : seule DL3045/error attendue, alertes obtenues : DL3045/warning
+DL3013 : seule DL3013/error attendue, alertes obtenues : DL3013/warning
+DL3042 : seule DL3042/error attendue, alertes obtenues : DL3042/warning
+DL3025 : seule DL3025/error attendue, alertes obtenues : DL3025/warning
+DL4003 : seule DL4003/error attendue, alertes obtenues : DL4003/warning
+seuil : Hadolint n'a pas échoué (attendu : DL3048 en style)
+pragma : Hadolint n'a pas échoué (attendu : DL3020 en error)
+exit: 1
 
 # limites de Hadolint et contrôle qui les couvre
 ## tag-mouvant
@@ -131,3 +169,24 @@ hadolint exit: 1
 1 violation(s) de pinning ou de durcissement.
 ::error::requirements.txt:1: dépendance non épinglée (==) : Flask>=3
 check_pinning exit: 1
+
+# lecture du Dockerfile par check_pinning.py comparée à BuildKit (FROM scratch, sans téléchargement)
+# BuildKit échoue sur « absent » si ADD est une instruction ; check_pinning.py doit refuser le même ADD
+## commentaire-antislash
+    FROM scratch
+    # commentaire \
+    ADD absent /x
+buildkit: [1/1] ADD absent /x
+check_pinning: ['ADD interdit, utiliser COPY : ADD absent /x']
+## tabulation
+    FROM scratch
+    ADD^Iabsent /x
+buildkit: [1/1] ADD	ABSENT /x
+check_pinning: ['ADD interdit, utiliser COPY : ADD absent /x']
+## heredoc
+    FROM scratch
+    COPY <<EOF /x
+    ADD absent /y
+    EOF
+buildkit: [1/1] COPY <<EOF /x
+check_pinning: []
