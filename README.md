@@ -346,13 +346,34 @@ Hadolint + pinning ───────┘                   └─ Compose + p
 - **Python de la CI** : 3.15, aligné sur l'image runtime.
 - **Ordre des gates** : aucun build ni conteneur avant le succès de Flake8,
   des tests unitaires, de Hadolint et du pinning.
-- **Hadolint** : règles DL3002, DL3006, DL3007 et DL4006 forcées en `error`,
-  SC2086 remontée en `warning` ; aucune règle désactivée, chaque règle testée
-  sur un Dockerfile fautif
-  ([`evidence/after/hadolint.txt`](evidence/after/hadolint.txt)). Hadolint
-  laisse passer un tag mouvant comme `python:3.10-slim` et un conteneur root
-  sans ligne `USER` : le pinning est donc vérifié par
-  `check_pinning.py`, et l'utilisateur par inspection de l'image.
+- **Hadolint** : politique d'équipe écrite dans
+  [`.hadolint.yaml`](.hadolint.yaml), chaque règle commentée avec sa raison :
+
+  | Règle d'équipe | Codes forcés en `error` |
+  | --- | --- |
+  | R1 Images de base : registre `cgr.dev` seul, tag explicite, jamais `latest` | DL3026, DL3006, DL3007 |
+  | R2 Exécution sans privilèges | DL3002, DL3004 |
+  | R3 Shell robuste | DL4006, SC2086, DL3003, DL4001 |
+  | R4 Copie maîtrisée | DL3020, DL3021, DL3022, DL3045, DL3000 |
+  | R5 Dépendances Python épinglées, sans cache pip | DL3013, DL3042 |
+  | R6 Démarrage prévisible (forme JSON, une seule instruction) | DL3025, DL4003, DL4004 |
+
+  Seuil `failure-threshold: info` : toute autre alerte Hadolint, même
+  `info`, bloque aussi. `ignored: []` et `disable-ignore-pragma: true` :
+  aucune exception possible, ni dans la configuration, ni par commentaire
+  `# hadolint ignore=` dans le Dockerfile.
+  Hadolint ignore sans erreur un code mal saisi : le script
+  [`check_hadolint_policy.py`](scripts/ci/check_hadolint_policy.py), exécuté
+  en CI, rejoue chaque règle d'équipe sur un Dockerfile fautif et exige
+  l'échec en `error`, vérifie que le seuil `info` et le refus des pragmas sont
+  effectifs, et que la liste testée correspond exactement à `.hadolint.yaml`.
+  Des mutations de la configuration (règle retirée, code mal saisi, pragma
+  autorisé, seuil relevé) font bien échouer ce contrôle
+  ([`evidence/after/hadolint.txt`](evidence/after/hadolint.txt)).
+  Limites : Hadolint laisse passer un tag mouvant du registre autorisé
+  (`cgr.dev/chainguard/python:latest-dev`) et un conteneur root sans ligne
+  `USER` : le digest est donc exigé par `check_pinning.py`, et l'utilisateur
+  vérifié par inspection de l'image.
 - **Une seule image** : construite une fois (BuildKit, `linux/amd64`, sans
   attestations), exportée par `docker save`, transmise en artefact. Chaque job
   consommateur vérifie le SHA256 de l'archive puis l'Image ID avant usage ;
@@ -451,6 +472,7 @@ par [`scripts/evidence/regenerate.sh`](scripts/evidence/regenerate.sh).
 | Flake8 | `flake8 --config=.flake8 app.py test_app.py tests scripts` (flake8 7.4.1, Python 3.15) | 0 violation |
 | Tests unitaires | `pytest -m "not integration"` (pytest 9.1.1, Python 3.15) | 6 passed |
 | Hadolint | `hadolint --config .hadolint.yaml Dockerfile` (2.15.1) | 0 alerte, y compris au seuil `info` |
+| Politique Hadolint | `scripts/ci/check_hadolint_policy.py` (2.15.1) | 19 règles d'équipe bloquantes en `error`, seuil `info` et refus des pragmas effectifs |
 | Pinning | `scripts/ci/check_pinning.py` | Dockerfile, Compose et actions conformes |
 | Dive ≥ 80 % | `dive --ci --ci-config .dive-ci` (0.13.1) | PASS : 99,72 %, 0,50 % d'octets gaspillés |
 | Trivy image | gate HIGH/CRITICAL corrigibles (0.75.0) | 0 ; rapport complet : 0 CVE détectée |
@@ -472,7 +494,7 @@ Preuves détaillées de la stack ([`evidence/`](evidence/)) :
 | --- | --- |
 | [`before/`](evidence/before/) | état initial : Flake8, Hadolint, image, paquets, Dive, Trivy |
 | [`after/flake8.txt`](evidence/after/flake8.txt) | Flake8 après correction |
-| [`after/hadolint.txt`](evidence/after/hadolint.txt) | Hadolint et test de chaque règle sur des Dockerfiles fautifs |
+| [`after/hadolint.txt`](evidence/after/hadolint.txt) | Hadolint, politique d'équipe rejouée sur des Dockerfiles fautifs, mutations de la configuration, limites |
 | [`after/dockerignore.txt`](evidence/after/dockerignore.txt) | fichiers reçus par le build malgré des fichiers parasites |
 | [`after/image.txt`](evidence/after/image.txt) | taille, utilisateur, shell, binaires, permissions |
 | [`after/dive.txt`](evidence/after/dive.txt) | Dive en mode CI |
@@ -501,6 +523,7 @@ pytest -m "not integration"
 
 # Gates statiques
 hadolint --config .hadolint.yaml Dockerfile
+python3 scripts/ci/check_hadolint_policy.py
 docker compose config --no-interpolate --format json \
   | python3 scripts/ci/check_pinning.py --compose-json -
 
