@@ -22,7 +22,11 @@ export EXPECTED_PLATFORM="linux/$ARCH"
 steps="${*:-build run}"
 for step in $steps; do
   case "$step" in
-    build) scripts/ci/build_variant.sh > "$out/build.txt" 2>&1; cp dist/metadata.json "$out/metadata.json"; cp reports/*.log "$out/" ;;
+    build)
+      : > "$GITHUB_OUTPUT"
+      scripts/ci/build_variant.sh > "$out/build.txt" 2>&1
+      cp dist/metadata.json "$out/metadata.json"
+      cp reports/*.log "$out/" ;;
     run)
       IMAGE=$(sed -n 's/^image=//p' "$GITHUB_OUTPUT")
       export IMAGE

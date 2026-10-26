@@ -556,7 +556,28 @@ Preuves détaillées de la stack ([`evidence/`](evidence/)) :
 | [`after/app-functional.txt`](evidence/after/app-functional.txt) | endpoints contre PostgreSQL |
 | [`after/compose-hardening.txt`](evidence/after/compose-hardening.txt) | stack Compose durcie : secret absent, healthy, capabilities, lecture seule, isolation réseau, intégration, persistance |
 
-Ces mesures TP1 portent sur le Dockerfile d'avant le TP2 (commit `33e6728`) et ne sont pas écrasées. Depuis le TP2, `scripts/evidence/regenerate.sh` délègue à `scripts/evidence/tp2.sh` (§ 8) et écrit dans `evidence/tp2/`. Pour la version TP1, il fallait lancer `scripts/evidence/regenerate.sh` depuis ce commit : les fichiers de `after/` qui dépendent de l'image (tous sauf `flake8.txt` et `hadolint.txt`) se régénéraient ainsi (Docker démarré, Dive et Trivy installés, `PYTHON` pointant vers un Python 3.15 avec `requirements-dev.txt`) ; `hadolint.txt` avec `scripts/evidence/hadolint.sh > evidence/after/hadolint.txt 2>&1`. Le script ne touche pas au répertoire `secrets/` (secret temporaire fourni par un override Compose), nettoie conteneurs, volumes et fichiers temporaires même en cas d'échec ou d'interruption, et sort en erreur si un résultat attendu n'est pas obtenu.
+Ces mesures TP1 portent sur le Dockerfile d'avant le TP2 (commit `33e6728`)
+et ne sont pas écrasées. Depuis le TP2, `scripts/evidence/regenerate.sh` sans
+argument, ou avec `build run scan`, délègue au parcours TP2 (§ 8). Les étapes
+TP1 telles que `all` ou `dive-db` restent accessibles : le script extrait la
+révision TP1 dans un temporaire, exécute son script historique et conserve
+uniquement les preuves régénérées dans un nouveau dossier
+`evidence/tp1/replay-*/`, avec un fichier `revision.txt`. Le code de sortie du
+parcours historique est conservé, y compris si ses contrôles échouent.
+
+```bash
+scripts/evidence/regenerate.sh all          # tous les contrôles historiques TP1
+scripts/evidence/regenerate.sh dive-db      # mesure historique PostgreSQL
+scripts/evidence/regenerate.sh --tp1 run    # run TP1 explicite ; run seul = TP2
+```
+
+Le commit TP1 doit être disponible dans l'historique Git local. Prérequis :
+Docker démarré, Dive et Trivy installés, `PYTHON` pointant vers un Python 3.15
+avec `requirements-dev.txt`. Les fichiers `flake8.txt` et `hadolint.txt` ne
+sont pas régénérés par ce parcours. Le script historique ne lit pas le
+répertoire `secrets/` de l'utilisateur ; son secret Compose est temporaire et
+ses ressources sont nettoyées même après échec. Le checkout courant et les
+preuves versionnées dans `evidence/after/` restent inchangés.
 
 ## 8. TP2 — BuildKit, secret et multi-architecture
 
