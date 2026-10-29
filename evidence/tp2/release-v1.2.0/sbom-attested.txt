@@ -1,0 +1,7 @@
+SBOM extraite de l'attestation amd64 == artefact CI sbom-amd64-1 (jq -S, cmp) : identique
+CycloneDX composants : 1906
+  file : 1866
+  library : 39
+  operating-system : 1
+SPDX paquets : 40
+--- Licences (CycloneDX)

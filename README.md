@@ -14,36 +14,40 @@ L'API est servie par gunicorn sur le port 5000 et lit `DB_HOST`, `DB_PORT`,
 `DB_NAME`, `DB_USER` et `DB_PASSWORD_FILE` (fichier secret), ou `DB_PASSWORD`
 à défaut.
 
-> **État du rapport.** Release `v1.1.0` publiée par la CI le 2026-10-08
-> ([run 37784147903](https://github.com/maximilianpw/devsecops-max-jb/actions/runs/37784147903)),
-> après `v1.0.0` ([run 37777799398](https://github.com/maximilianpw/devsecops-max-jb/actions/runs/37777799398)). Les sorties brutes des mesures locales
+> **État du rapport.** Release `v1.2.0` (TP2 : amd64 + arm64, signée,
+> SBOM attestée) publiée par la CI le 2026-10-29
+> ([run 40891629185](https://github.com/maximilianpw/devsecops-max-jb/actions/runs/40891629185)), après `v1.1.0`
+> ([run 37784147903](https://github.com/maximilianpw/devsecops-max-jb/actions/runs/37784147903))
+> et `v1.0.0` ([run 37777799398](https://github.com/maximilianpw/devsecops-max-jb/actions/runs/37777799398)). Les sorties brutes des mesures locales
 > sont dans [`evidence/`](evidence/). Chaque mesure indique sa date, sa
 > commande et la version de l'outil. Le TP2 (build Bake, secret BuildKit,
 > amd64 + arm64, index multi-plateforme) est décrit au § 8, le SBOM, Grype et
-> le VEX au § 9 ; aucune release multi-architecture n'est encore publiée.
+> le VEX au § 9, la signature et la vérification publique au § 10.
 
 ## 1. Packages GHCR publics
 
 | Image | Lien | Statut |
 | --- | --- | --- |
-| API Flask | [`ghcr.io/maximilianpw/devsecops-max-jb`](https://github.com/users/maximilianpw/packages/container/package/devsecops-max-jb) | public, dernière release `v1.1.0` publiée le 2026-10-08 |
+| API Flask | [`ghcr.io/maximilianpw/devsecops-max-jb`](https://github.com/users/maximilianpw/packages/container/package/devsecops-max-jb) | public, dernière release `v1.2.0` publiée le 2026-10-29 (amd64 + arm64, signée) |
 
 Commandes de récupération, sans authentification :
 
 ```bash
-docker pull ghcr.io/maximilianpw/devsecops-max-jb:1.1.0   # version exacte
-docker pull ghcr.io/maximilianpw/devsecops-max-jb:1.1     # alias mineur
+docker pull ghcr.io/maximilianpw/devsecops-max-jb:1.2.0   # version exacte
+docker pull ghcr.io/maximilianpw/devsecops-max-jb:1.2     # alias mineur
 docker pull ghcr.io/maximilianpw/devsecops-max-jb:1       # alias majeur
-docker pull ghcr.io/maximilianpw/devsecops-max-jb@sha256:451dccc2796cfb0d5c0e65ab683368977afac30604cc354067dfb6ca36943463
+docker pull ghcr.io/maximilianpw/devsecops-max-jb@sha256:84a7a1a1a2e1379e5dd5095f5c2b9d26f76230cd3d567ebfd42c0a37d36f4b94
 ```
 
 | Version | Tags | Digest publié | Image auditée (Image ID) | Contenu |
 | --- | --- | --- | --- | --- |
-| `v1.1.0` | `1.1.0`, `1.1`, `1` | `sha256:451dccc2796cfb0d5c0e65ab683368977afac30604cc354067dfb6ca36943463` | `sha256:e4564d69d8fbbed2af48181cfa371d3ee8ea0ffc152099640a120f86fd165474` | mot de passe lu depuis `DB_PASSWORD_FILE` ; Compose durci, secret fichier ; gate Trivy sur l'image PostgreSQL |
+| `v1.2.0` | `1.2.0`, `1.2`, `1` | index `sha256:84a7a1a1a2e1379e5dd5095f5c2b9d26f76230cd3d567ebfd42c0a37d36f4b94` (amd64 `sha256:0296806c2b6448717924b9afcf275e01756119ce6a8b97c8e9913523b713c51e`, arm64 `sha256:ab05b6f7094d6fcd5ebc523672b1493d18ae95aaa64648386c146e4f402e1313`) | amd64 `sha256:2174d1361fa1257a43b92b6541154e2f81f59df149b33a6f3f3ad84f98566d52`, arm64 `sha256:5e13ec1e3b62bd6e4f327ae12dc370b02f888f935df15f4098ba5b4a28bf5145` | TP2 : Bake, secret BuildKit, amd64 + arm64, SBOM CycloneDX/SPDX, Grype + VEX, signature Cosign keyless et SBOM attestée |
+| `v1.1.0` | `1.1.0`, `1.1` | `sha256:451dccc2796cfb0d5c0e65ab683368977afac30604cc354067dfb6ca36943463` | `sha256:e4564d69d8fbbed2af48181cfa371d3ee8ea0ffc152099640a120f86fd165474` | mot de passe lu depuis `DB_PASSWORD_FILE` ; Compose durci, secret fichier ; gate Trivy sur l'image PostgreSQL |
 | `v1.0.0` | `1.0.0`, `1.0` | `sha256:3a145abadcb61a994b8c289b7a615f300e036faa42c2c279c39cdfaa0c28034f` | `sha256:ce1ca47843510b426d41d0bffa2fe8de371a11908cd4635e829e0b443ee9f402` | stack durcie et pipeline DevSecOps |
 
-`1.0.0` n'a pas été réécrit par la release `v1.1.0` (même digest qu'à sa
-publication, vérifié le 2026-10-08) ; l'alias `1` suit désormais `1.1.0`.
+`1.0.0` et `1.1.0` n'ont pas été réécrits par les releases suivantes (mêmes
+digests qu'à leur publication, revérifiés le 2026-10-29) ; l'alias `1` suit
+désormais `1.2.0`.
 
 Tags publiés pour une release `vX.Y.Z` : `X.Y.Z`, `X.Y` et `X`. Seul le digest
 est immuable. `X.Y.Z` n'est jamais réécrit. Les alias `X.Y` et `X` suivent la
@@ -699,7 +703,10 @@ fin de build.
   `mode=max` avant l'export distant. L'export registre utilise gzip ; les blobs
   distants sont ensuite téléchargés, vérifiés par SHA256 et inspectés avec le
   détecteur exact du jeton. Un manifeste sans couches ou une compression zstd
-  non prise en charge bloque l'audit. L'audit distant reste à exercer sur GHCR.
+  non prise en charge bloque l'audit. Sur GHCR (push `main` du 2026-10-29,
+  [run 40890288542](https://github.com/maximilianpw/devsecops-max-jb/actions/runs/40890288542),
+  puis release `v1.2.0`) : « Cache registre audité: 29 blobs, sans jeton. »
+  sur chaque architecture.
 - **Limites** : le cache `mode=max` ne transporte pas le contenu des montages
   cache. pip n'est donc pas persistant d'un runner à l'autre, ce qui n'est pas
   un objectif du TP. Le cache registre est un accélérateur, jamais une preuve :
@@ -792,9 +799,9 @@ métadonnées, intégration. Les mesures TP1 de `evidence/after/` sont conservé
 | Compose + 3 tests HTTP, architecture et Image ID vérifiés | ✅ | ✅ | ✅ / ✅ | — |
 | Dive ≥ 80 % | ✅ 99,74 % | ✅ 99,72 % | ✅ 99,72 % / 99,74 % | — |
 | Trivy, toutes sévérités (API, deps, PostgreSQL) | ✅ 0 | ✅ 0 | ✅ 0 / 0 | — |
-| Index amd64 + arm64 publié, pulls anonymes | registre jetable | — | — | à vérifier (non exécutée) |
+| Index amd64 + arm64 publié, pulls anonymes | registre jetable | — | — | ✅ `v1.2.0` |
 | Signature récursive, attestations SBOM, admission (clé jetable) | registre jetable | — | — | — |
-| Signature et admission keyless (OIDC GitHub) | — | — | — | à vérifier (non exécutée : v1.2.0 pas encore publiée) |
+| Signature et admission keyless (OIDC GitHub), puis tags | — | — | — | ✅ `v1.2.0` ([run 40891629185](https://github.com/maximilianpw/devsecops-max-jb/actions/runs/40891629185)) |
 
 CI : [run 40343481595](https://github.com/maximilianpw/devsecops-max-jb/actions/runs/40343481595)
 (PR #10, commit `d5989da`, 2026-10-26), Buildx 0.38.0, BuildKit 0.33.1 ;
@@ -824,8 +831,11 @@ syft scan docker-archive:dist/image.tar \
 ```
 
 Les deux fichiers sont publiés dans l'artefact `sbom-<arch>-<tentative>`
-(output `sbom-artifact-id` de `tp2-scan.yaml`), et copiés à la racine du dépôt
-pour la release. [`sbom_stats.sh`](scripts/ci/sbom_stats.sh) en extrait les
+(output `sbom-artifact-id` de `tp2-scan.yaml`). Ceux de l'amd64 de la release
+`v1.2.0` sont versionnés à la racine ([`sbom.cdx.json`](sbom.cdx.json),
+[`sbom.spdx.json`](sbom.spdx.json)) ; le premier est identique à la SBOM
+attestée sur GHCR (§ 10).
+[`sbom_stats.sh`](scripts/ci/sbom_stats.sh) en extrait les
 statistiques (`reports/sbom-stats.txt`) et échoue sur un inventaire vide :
 
 ```bash
@@ -924,12 +934,18 @@ commence à traiter des archives.
 
 ## 10. Vérification publique (évaluateur)
 
-Référence complète de la release, à renseigner après la publication de
-`v1.2.0` (digest de l'index) :
+Référence complète de la release `v1.2.0`
+([run 40891629185](https://github.com/maximilianpw/devsecops-max-jb/actions/runs/40891629185), commit `f2800cf`, 2026-10-29) :
 
 ```text
-ghcr.io/maximilianpw/devsecops-max-jb:1.2.0@sha256:<index-digest>
+ghcr.io/maximilianpw/devsecops-max-jb:1.2.0@sha256:84a7a1a1a2e1379e5dd5095f5c2b9d26f76230cd3d567ebfd42c0a37d36f4b94
 ```
+
+| Manifeste | Digest | Config digest (Image ID testé) |
+| --- | --- | --- |
+| index | `sha256:84a7a1a1a2e1379e5dd5095f5c2b9d26f76230cd3d567ebfd42c0a37d36f4b94` | — |
+| linux/amd64 | `sha256:0296806c2b6448717924b9afcf275e01756119ce6a8b97c8e9913523b713c51e` | `sha256:2174d1361fa1257a43b92b6541154e2f81f59df149b33a6f3f3ad84f98566d52` |
+| linux/arm64 | `sha256:ab05b6f7094d6fcd5ebc523672b1493d18ae95aaa64648386c146e4f402e1313` | `sha256:5e13ec1e3b62bd6e4f327ae12dc370b02f888f935df15f4098ba5b4a28bf5145` |
 
 Aucun identifiant n'est nécessaire : le package est public et la
 vérification ne lit que le registre et les journaux publics de Sigstore.
@@ -947,11 +963,11 @@ ISSUER="https://token.actions.githubusercontent.com"
 
 # Digests : index, puis un manifeste par plateforme
 docker buildx imagetools inspect ghcr.io/maximilianpw/devsecops-max-jb:1.2.0
-INDEX=sha256:<index-digest>
+INDEX=sha256:84a7a1a1a2e1379e5dd5095f5c2b9d26f76230cd3d567ebfd42c0a37d36f4b94
 docker buildx imagetools inspect --raw "$REPOSITORY@$INDEX" \
   | jq -r '.manifests[] | "\(.platform.architecture) \(.digest)"'
-AMD64=sha256:<amd64-digest>
-ARM64=sha256:<arm64-digest>
+AMD64=sha256:0296806c2b6448717924b9afcf275e01756119ce6a8b97c8e9913523b713c51e
+ARM64=sha256:ab05b6f7094d6fcd5ebc523672b1493d18ae95aaa64648386c146e4f402e1313
 
 # Signature de l'index et de chaque manifeste (signature récursive)
 for d in "$INDEX" "$AMD64" "$ARM64"; do
@@ -976,6 +992,34 @@ altérée) retourne un code non nul. Pour extraire la SBOM, utiliser
 `verify-attestation` et non `cosign download attestation` : cette dernière
 commande ne vérifie rien et renvoie aussi les bundles de signature, pas
 seulement l'attestation CycloneDX.
+
+### Preuves de la release `v1.2.0`
+
+Commandes ci-dessus lancées le 2026-10-29 depuis macOS, `DOCKER_CONFIG` vide
+(aucun identifiant GHCR), Cosign 3.1.3. Sorties complètes :
+[`evidence/tp2/release-v1.2.0/`](evidence/tp2/release-v1.2.0/).
+
+Index multi-plateforme (`docker buildx imagetools inspect`) :
+
+```text
+Name:      ghcr.io/maximilianpw/devsecops-max-jb:1.2.0
+MediaType: application/vnd.docker.distribution.manifest.list.v2+json
+Digest:    sha256:84a7a1a1a2e1379e5dd5095f5c2b9d26f76230cd3d567ebfd42c0a37d36f4b94
+Manifests:
+  Name:      ghcr.io/maximilianpw/devsecops-max-jb:1.2.0@sha256:0296806c2b6448717924b9afcf275e01756119ce6a8b97c8e9913523b713c51e
+  Platform:  linux/amd64
+  Name:      ghcr.io/maximilianpw/devsecops-max-jb:1.2.0@sha256:ab05b6f7094d6fcd5ebc523672b1493d18ae95aaa64648386c146e4f402e1313
+  Platform:  linux/arm64
+```
+
+| Contrôle | Résultat |
+| --- | --- |
+| `cosign verify` sur l'index et les deux manifestes | ✅ ×3 : claims validées, présence dans Rekor vérifiée, certificat Fulcio vérifié |
+| `cosign verify-attestation --type cyclonedx` amd64 / arm64 | ✅ ×2 : `predicateType` `https://cyclonedx.org/bom`, sujet = digest du manifeste, 1906 composants |
+| SBOM extraite de l'attestation amd64 | identique (JSON trié) à l'artefact CI `sbom-amd64-1`, copié à la racine : [`sbom.cdx.json`](sbom.cdx.json), [`sbom.spdx.json`](sbom.spdx.json) |
+| Identité attendue erronée (`…@refs/tags/v1.1.0`) | ❌ code 1 : `expected SAN value "…ci.yaml@refs/tags/v1.1.0", got "…ci.yaml@refs/tags/v1.2.0"` |
+| Tags `1.2.0`, `1.2`, `1` | les trois → index signé ; `1.1.0` et `1.0.0` inchangés |
+| CI : `Signature and SBOM admission`, `Promote admitted index to release tags`, pulls anonymes amd64/arm64 | ✅ (run 40891629185) |
 
 ### Keyless : ce que prouve la signature
 
@@ -1061,11 +1105,10 @@ cyclonedx` (« none of the attestations matched the predicate type »).
   ```
 
   Requiert `docker`, `cosign`, `crane` et `syft` ; ignoré sinon.
-- **Non exécuté tant que `v1.2.0` n'est pas publiée** : le mode keyless
-  (Fulcio, Rekor, SAN du certificat) et le comportement de GHCR. Ils ne se
-  testent que dans un vrai run GitHub Actions ; la section « Preuves » sera
-  complétée avec la sortie réelle des commandes ci-dessus, lancées depuis une
-  machine sans connexion GHCR.
+- Le mode keyless (Fulcio, Rekor, SAN du certificat) et le comportement de
+  GHCR ne se testent que dans un vrai run GitHub Actions : exercés par la
+  release `v1.2.0`, puis revérifiés depuis un poste sans connexion GHCR
+  (ci-dessus).
 - **Échec de la signature ou de l'admission** (Fulcio, Rekor ou OIDC
   indisponible) : aucun tag de release n'a été posé, seules des refs
   `staging-*` existent. Un « Re-run failed jobs » republie un nouvel index
