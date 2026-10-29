@@ -8,6 +8,12 @@ on:
       runner:
         type: string
         required: true
+      cache-write:
+        type: boolean
+        default: false
+        description: >-
+          Export the per-architecture registry build cache with mode=max. The
+          build script also requires a trusted push context.
     outputs:
       image:
         value: ${{ jobs.variant.outputs.image }}
@@ -27,6 +33,7 @@ jobs:
     runs-on: ${{ inputs.runner }}
     permissions:
       contents: read
+      packages: write
     outputs:
       image: ${{ steps.build.outputs.image }}
       image-id: ${{ steps.build.outputs.image_id }}
@@ -46,6 +53,7 @@ jobs:
         id: build
         env:
           ARCH: ${{ inputs.arch }}
+          CACHE_WRITE: ${{ inputs.cache-write }}
         run: scripts/ci/build_variant.sh
       - name: Native Compose and HTTP tests
         env:

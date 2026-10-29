@@ -1,10 +1,16 @@
 #!/usr/bin/env bash
-# Construction et contrôles secrets sur un builder dédié ; aucun cache distant en CI.
+# Construction et contrôles secrets sur un builder dédié ; cache registre par
+# architecture, importé anonymement à chaque build, exporté seulement sur
+# contexte de confiance.
 set -euo pipefail
 : "${ARCH:?}" "${GITHUB_SHA:?}" "${GITHUB_RUN_ID:?}" "${GITHUB_RUN_ATTEMPT:?}"
 case "$ARCH" in amd64|arm64) ;; *) exit 1 ;; esac
 export IMAGE=flask-api TAG="ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${ARCH}"
-export CI_PLATFORM="linux/$ARCH" CACHE_REF=""
+: "${GITHUB_REPOSITORY:=maximilianpw/devsecops-max-jb}"
+CACHE_REF="ghcr.io/${GITHUB_REPOSITORY}:buildcache-${ARCH}"
+# Ne pas exporter CACHE_REF : docker-bake.hcl n'active alors aucun cache registre
+# implicite ; l'import/export est piloté explicitement ci-dessous.
+export CI_PLATFORM="linux/$ARCH"
 export BUILD_SECRET_FILE
 work=$(mktemp -d)
 BUILD_SECRET_FILE="$work/build_token"
@@ -12,6 +18,14 @@ builder="tp2-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${ARCH}"
 # Logs bruts dans l'espace privé ; seuls les logs audités sans jeton sont copiés
 # vers reports/ (publié), y compris après un échec ou une interruption.
 logs="$work/logs"
+# Export registre uniquement sur entrée explicite ET contexte push main/tag.
+registry_cache_write=false
+if [[ "${CACHE_WRITE:-false}" == "true" && "${GITHUB_EVENT_NAME:-}" == "push" ]]; then
+  ref="${GITHUB_REF:-}"
+  case "$ref" in
+    refs/heads/main|refs/tags/*) registry_cache_write=true ;;
+  esac
+fi
 cleanup() {
   rc=$?
   trap - EXIT
@@ -20,6 +34,7 @@ cleanup() {
   fi
   docker buildx rm "$builder" >/dev/null 2>&1 || true
   docker buildx rm "$builder-fresh" >/dev/null 2>&1 || true
+  docker logout ghcr.io >/dev/null 2>&1 || true
   rm -rf "$work" dist/layer-cache
   exit "$rc"
 }
@@ -54,7 +69,11 @@ if docker buildx build --platform "$CI_PLATFORM" --target builder --no-cache \
   echo 'Secret vide accepté' >&2; exit 1
 fi
 grep -q 'Build secret package_token must not be empty' "$logs/empty.log"
-docker buildx bake --allow "fs.read=$BUILD_SECRET_FILE" -f docker-bake.hcl app-ci --progress=plain > "$logs/build.log" 2>&1
+# Import anonyme du cache registre à chaque build ; l'export reste désactivé
+# ici pour ne jamais écrire le cache par inadvertance.
+docker buildx bake --allow "fs.read=$BUILD_SECRET_FILE" -f docker-bake.hcl app-ci \
+  --set "app-ci.cache-from=type=registry,ref=${CACHE_REF}" \
+  --progress=plain > "$logs/build.log" 2>&1
 # Cache pip : --no-cache ignorerait aussi le montage cache. On invalide donc
 # seulement la couche pip, sur le même builder, via une copie du contexte dont
 # requirements.txt diffère d'un commentaire. L'image publiée reste celle du bake.
@@ -70,7 +89,8 @@ fi
 docker save --output dist/image.tar "$IMAGE:$TAG"
 # Export du builder pour couvrir également les couches du cache mode=max.
 docker buildx bake --allow "fs.read=$BUILD_SECRET_FILE" -f docker-bake.hcl app-ci --set app-ci.target=builder \
-  --set "app-ci.tags=flask-api:builder-$TAG" --progress=plain > "$logs/builder.log" 2>&1
+  --set "app-ci.tags=flask-api:builder-$TAG" \
+  --progress=plain > "$logs/builder.log" 2>&1
 docker save --output dist/builder.tar "flask-api:builder-$TAG"
 docker run --rm --platform "$CI_PLATFORM" --entrypoint python "flask-api:builder-$TAG" \
   -c "from pathlib import Path; assert not Path('/run/secrets/package_token').exists()"
@@ -81,6 +101,7 @@ if python3 scripts/ci/audit_secret.py "$BUILD_SECRET_FILE" "$work/secrets/build_
 fi
 # Un builder neuf recharge le cache externe local de couches (pas le cache pip).
 docker buildx bake --allow "fs.read=$BUILD_SECRET_FILE" -f docker-bake.hcl app-ci --set 'app-ci.cache-to=type=local,dest=dist/layer-cache,mode=max' \
+  --set "app-ci.cache-from=type=registry,ref=${CACHE_REF}" \
   --progress=plain > "$logs/cache-export.log" 2>&1
 python3 scripts/ci/audit_secret.py "$BUILD_SECRET_FILE" dist/layer-cache/blobs/sha256/* "$logs/cache-export.log"
 fresh="$builder-fresh"
@@ -93,6 +114,19 @@ fi
 docker buildx rm "$fresh"
 grep -q 'CACHED' "$logs/layer-cache.log"
 rm -rf dist/layer-cache
+# Export registre uniquement sur contexte de confiance, après audit local.
+if [[ "$registry_cache_write" == "true" ]]; then
+  if [[ -z "${GITHUB_TOKEN:-}" ]]; then
+    echo 'Jeton GitHub absent pour l export du cache registre' >&2; exit 1
+  fi
+  printf '%s' "$GITHUB_TOKEN" | docker login ghcr.io --username "${GITHUB_ACTOR:-}" --password-stdin > "$logs/registry-login.log" 2>&1
+  docker buildx bake --allow "fs.read=$BUILD_SECRET_FILE" -f docker-bake.hcl app-ci \
+    --set "app-ci.cache-to=type=registry,ref=${CACHE_REF},mode=max" \
+    --set "app-ci.cache-from=type=registry,ref=${CACHE_REF}" \
+    --progress=plain > "$logs/cache-registry-export.log" 2>&1
+  python3 scripts/ci/audit_secret.py "$BUILD_SECRET_FILE" "$logs/cache-registry-export.log"
+  python3 scripts/ci/audit_registry_cache.py --secret-file "$BUILD_SECRET_FILE" --ref "$CACHE_REF"
+fi
 # Le jeton source est détruit à la sortie ; Trivy le reconnaît par sa forme TP2_.
 python3 scripts/ci/image_archive.py describe dist/image.tar > "$work/image.json"
 python3 - "$work/image.json" <<'PY'
