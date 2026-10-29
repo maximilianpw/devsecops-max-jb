@@ -22,7 +22,69 @@ L'API est servie par gunicorn sur le port 5000 et lit `DB_HOST`, `DB_PORT`,
 > sont dans [`evidence/`](evidence/). Chaque mesure indique sa date, sa
 > commande et la version de l'outil. Le TP2 (build Bake, secret BuildKit,
 > amd64 + arm64, index multi-plateforme) est décrit au § 8, le SBOM, Grype et
-> le VEX au § 9, la signature et la vérification publique au § 10.
+> le VEX au § 9, la signature et la vérification publique au § 10 ; résumé
+> ci-dessous.
+
+## TP2 en bref (correcteur)
+
+**Image publiée** :
+`ghcr.io/maximilianpw/devsecops-max-jb:1.2.0@sha256:84a7a1a1a2e1379e5dd5095f5c2b9d26f76230cd3d567ebfd42c0a37d36f4b94`
+(index amd64 + arm64, package public, aucun identifiant nécessaire).
+
+**Pipeline** ([`ci.yaml`](.github/workflows/ci.yaml), chaque étape bloque la
+suivante) :
+
+```text
+Flake8 + pytest ┐                ┌ scan amd64 (Dive, Trivy, Syft, Grype+VEX) ┐
+Hadolint + pin  ┴ build amd64 ───┤                                           ├ release ─ admission ─ promote ─ pull anonyme
+                  build arm64 ───┴ scan arm64 (idem)                         ┘ (tag)    (cosign)    (tags)    (amd64 + arm64)
+                  (Bake, secret, cache, Compose + tests HTTP natifs)
+```
+
+| Livrable | Fichier | Détail |
+| --- | --- | --- |
+| Dockerfile BuildKit (cache pip, secret en tmpfs), 0 erreur Hadolint | [`Dockerfile`](Dockerfile) | § 8 |
+| Build déclaratif multi-arch, secret, version, cache registre `mode=max` | [`docker-bake.hcl`](docker-bake.hcl) | § 8 |
+| SBOM CycloneDX + SPDX (artefacts CI `sbom-<arch>-*` et racine du dépôt) | [`sbom.cdx.json`](sbom.cdx.json), [`sbom.spdx.json`](sbom.spdx.json) | § 9 |
+| Politique Grype sur SBOM et déclaration OpenVEX | [`.grype.yaml`](.grype.yaml), [`security.vex.json`](security.vex.json) | § 9 |
+| Vérification d'identité OIDC (keyless, pas de `cosign.pub`) | [`ci.yaml`](.github/workflows/ci.yaml), jobs `release` et `admission` | § 10 |
+
+**Résultats de la release `v1.2.0`** (run 40891629185, commit `f2800cf`) :
+
+| Contrôle | amd64 | arm64 |
+| --- | --- | --- |
+| Secret absent/vide refusé ; jeton absent des couches, de l'historique, du cache et des logs | ✅ | ✅ |
+| Cache pip : 0 retéléchargement après modification mineure ; cache registre audité (29 blobs, sans jeton) | ✅ | ✅ |
+| Compose + tests HTTP natifs (`/health`, `/hello`, `/dbtest`) | ✅ | ✅ |
+| Dive (seuil 80 %) | 99,72 % | 99,74 % |
+| Trivy image, dépendances, PostgreSQL (toutes sévérités) | 0 | 0 |
+| Grype sur SBOM | 0 faille, 1 supprimée par VEX | 0 faille, 1 supprimée par VEX |
+| SBOM : composants CycloneDX / paquets SPDX | 1906 / 40 | 1906 / 40 |
+| Signature keyless de l'index et du manifeste, attestation CycloneDX, admission | ✅ | ✅ |
+| Pull anonyme et smoke test natif (tags `1.2.0`, `1.2`, `1` et digest) | ✅ | ✅ |
+
+Vérification refaite depuis un poste sans connexion GHCR, contrôle négatif
+compris : § 10 et [`evidence/tp2/release-v1.2.0/`](evidence/tp2/release-v1.2.0/).
+
+**Permissions du jeton, par job** (`permissions: {}` au niveau du workflow) :
+
+| Job | Permissions |
+| --- | --- |
+| Flake8, Hadolint, scans | `contents: read` |
+| Build, chemin `readonly` (PR) | `contents: read` |
+| Build, chemin `trusted` (push `main` ou tag) | `contents: read`, `packages: write` (cache registre) |
+| `release` | `contents: read`, `packages: write`, `id-token: write` (OIDC Cosign), `actions: read` (identité des artefacts SBOM) |
+| `admission`, pull anonyme | aucune |
+| `promote` | `contents: read`, `packages: write` |
+
+**Choix assumés** :
+
+- L'archive testée et scannée est poussée telle quelle (`crane push`) :
+  pas de reconstruction, et le digest publié est comparé à l'Image ID testé.
+- La signature et l'admission ont lieu avant la pose des tags : un tag
+  public désigne toujours un index signé et admis.
+- L'énoncé VEX vise la version exacte du paquet, avec une date de revue.
+- La signature et l'attestation visent des digests, jamais des tags.
 
 ## 1. Packages GHCR publics
 
@@ -488,6 +550,14 @@ l'API GitHub le 2026-10-08, non contrôlés par la CI) :
 
 ## 7. Preuves
 
+### Run de release `v1.2.0`
+
+[Run 40891629185](https://github.com/maximilianpw/devsecops-max-jb/actions/runs/40891629185),
+déclenché par le tag `v1.2.0` sur le commit `f2800cf` (merge de la PR #12),
+le 2026-10-29. Les 13 jobs exécutés sont en succès (les 2 chemins de build
+`readonly` sont sautés sur push). Résultats : « TP2 en bref » ; vérification
+publique : § 10.
+
 ### Run de release `v1.1.0`
 
 [Run 37784147903](https://github.com/maximilianpw/devsecops-max-jb/actions/runs/37784147903), déclenché par le tag `v1.1.0` sur le
@@ -791,14 +861,14 @@ registre jetable. Aucune image de test n'a été poussée sur GHCR.
 Docker, Buildx, Compose), logs de build, du cache pip et du cache de couches,
 métadonnées, intégration. Les mesures TP1 de `evidence/after/` sont conservées.
 
-| Contrôle | Local arm64 (natif) | Local amd64 (émulé) | CI amd64 / arm64 (natifs) | Release |
+| Contrôle | Local arm64 (natif) | Local amd64 (émulé) | CI amd64 / arm64 (natifs) | Release `v1.2.0` (amd64 / arm64) |
 | --- | --- | --- | --- | --- |
-| Secret absent/vide refusé, aucune fuite | ✅ | ✅ | ✅ / ✅ | — |
-| Cache pip réutilisé (18 `Using cached`, 0 `Downloading`) | ✅ | ✅ | ✅ / ✅ | — |
-| Cache de couches sur builder neuf (6 étapes `CACHED`) | ✅ | ✅ | ✅ / ✅ | — |
-| Compose + 3 tests HTTP, architecture et Image ID vérifiés | ✅ | ✅ | ✅ / ✅ | — |
-| Dive ≥ 80 % | ✅ 99,74 % | ✅ 99,72 % | ✅ 99,72 % / 99,74 % | — |
-| Trivy, toutes sévérités (API, deps, PostgreSQL) | ✅ 0 | ✅ 0 | ✅ 0 / 0 | — |
+| Secret absent/vide refusé, aucune fuite | ✅ | ✅ | ✅ / ✅ |✅ / ✅ |
+| Cache pip réutilisé (18 `Using cached`, 0 `Downloading`) | ✅ | ✅ | ✅ / ✅ |✅ / ✅ |
+| Cache de couches sur builder neuf (6 étapes `CACHED`) | ✅ | ✅ | ✅ / ✅ |✅ / ✅ |
+| Compose + 3 tests HTTP, architecture et Image ID vérifiés | ✅ | ✅ | ✅ / ✅ |✅ / ✅ |
+| Dive ≥ 80 % | ✅ 99,74 % | ✅ 99,72 % | ✅ 99,72 % / 99,74 % |✅ 99,72 % / 99,74 % |
+| Trivy, toutes sévérités (API, deps, PostgreSQL) | ✅ 0 | ✅ 0 | ✅ 0 / 0 |✅ 0 / 0 |
 | Index amd64 + arm64 publié, pulls anonymes | registre jetable | — | — | ✅ `v1.2.0` |
 | Signature récursive, attestations SBOM, admission (clé jetable) | registre jetable | — | — | — |
 | Signature et admission keyless (OIDC GitHub), puis tags | — | — | — | ✅ `v1.2.0` ([run 40891629185](https://github.com/maximilianpw/devsecops-max-jb/actions/runs/40891629185)) |
@@ -808,6 +878,11 @@ CI : [run 40343481595](https://github.com/maximilianpw/devsecops-max-jb/actions/
 les 5 checks requis sont verts, et la publication est sautée hors tag.
 Image IDs testés puis scannés : amd64 `sha256:253721ca…`, arm64
 `sha256:20d11bce…`. Rapports : artefacts `build-reports-*` et `scan-reports-*`.
+
+Release : [run 40891629185](https://github.com/maximilianpw/devsecops-max-jb/actions/runs/40891629185)
+(tag `v1.2.0`, commit `f2800cf`, 2026-10-29), mêmes contrôles sur chaque
+architecture. Image IDs publiés : amd64 `sha256:2174d136…`, arm64
+`sha256:5e13ec1e…`.
 
 Preuves locales : `evidence/tp2/local-1793025514-arm64/` et `evidence/tp2/local-1793025818-amd64/`. Environnement : macOS arm64, Docker 29.5.3 (containerd image store),
 Buildx 0.34.1, BuildKit 0.33.1 (builder `docker-container`), le 2026-10-26.
@@ -834,7 +909,9 @@ Les deux fichiers sont publiés dans l'artefact `sbom-<arch>-<tentative>`
 (output `sbom-artifact-id` de `tp2-scan.yaml`). Ceux de l'amd64 de la release
 `v1.2.0` sont versionnés à la racine ([`sbom.cdx.json`](sbom.cdx.json),
 [`sbom.spdx.json`](sbom.spdx.json)) ; le premier est identique à la SBOM
-attestée sur GHCR (§ 10).
+attestée sur GHCR (§ 10). Ceux de l'arm64 sont dans
+[`evidence/tp2/release-v1.2.0/`](evidence/tp2/release-v1.2.0/)
+(`sbom-arm64.cdx.json`, `sbom-arm64.spdx.json`).
 [`sbom_stats.sh`](scripts/ci/sbom_stats.sh) en extrait les
 statistiques (`reports/sbom-stats.txt`) et échoue sur un inventaire vide :
 
@@ -1082,8 +1159,11 @@ signatures et attestations au **format bundle Sigstore** (type de média
 comme artefacts OCI (« referrers »). Quand le registre n'expose pas l'API
 Referrers, Cosign utilise le schéma de tags `sha256-<digest>` : ces tags
 apparaissent dans la liste des tags du package. Constaté localement avec la
-3.1.4 sur un registre `registry:2` ; le comportement exact de GHCR sera
-constaté au premier run de release. `cosign sign --recursive` signe l'index
+3.1.4 sur un registre `registry:2`, puis sur GHCR avec `v1.2.0` : GHCR répond
+404 à l'API Referrers, et les bundles sont publiés sous les tags
+`sha256-84a7a1a1…` (index), `sha256-0296806c…` (amd64) et `sha256-ab05b6f7…`
+(arm64). Les refs `staging-40891629185-1-*` du run restent aussi visibles :
+elles désignent les mêmes digests que les tags de release. `cosign sign --recursive` signe l'index
 et chacun de ses manifestes ; `verify` et `verify-attestation` retrouvent les
 bundles par digest. Les signatures sont aussi des bundles DSSE : une
 plateforme sans attestation CycloneDX fait échouer `verify-attestation --type
