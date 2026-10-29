@@ -1,0 +1,18 @@
+{
+  "@context": "https://openvex.dev/ns/v0.2.0",
+  "@id": "https://github.com/maximilianpw/devsecops-max-jb/security.vex.json",
+  "author": "Maximilian PINDER-WHITE",
+  "timestamp": "2026-10-29T12:53:56Z",
+  "version": 1,
+  "statements": [
+    {
+      "vulnerability": { "name": "CVE-2026-114583" },
+      "products": [
+        { "@id": "pkg:apk/wolfi/python-3.15@3.15.0_git20261017-r4" }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "La faille touche uniquement tarfile.extractall() avec filter=\"tar\". L'API (app.py, Flask, Werkzeug, gunicorn, psycopg2) n'importe jamais tarfile et n'extrait aucune archive ; l'image runtime n'a ni pip, ni shell, ni binaire tar, et tourne en nonroot sur un système de fichiers en lecture seule."
+    }
+  ]
+}

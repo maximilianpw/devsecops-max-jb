@@ -126,7 +126,8 @@ case "$*" in *" up "*|*" logs "*) exit 1 ;; esac
 def scan_workspace(tmp_path):
     workspace = tmp_path / 'repo'
     (workspace / 'scripts' / 'ci').mkdir(parents=True)
-    shutil.copy(CI / 'scan_variant.sh', workspace / 'scripts' / 'ci')
+    for name in ['scan_variant.sh', 'sbom_stats.sh']:
+        shutil.copy(CI / name, workspace / 'scripts' / 'ci')
     stub(workspace / 'scripts' / 'ci', 'load_verified_image.sh', 'exit 0\n')
     (workspace / 'scripts' / 'ci' / 'trivy-secret.yaml').write_text('rules: []\n')
     (workspace / 'dist').mkdir()
@@ -134,6 +135,11 @@ def scan_workspace(tmp_path):
     bin_dir.mkdir()
     stub(bin_dir, 'docker', 'echo \'{"services": {"db": {"image": "db@sha256:x"}}}\'\n')
     stub(bin_dir, 'dive', 'echo "dive $*" >> "$CALLS"\n')
+    stub(bin_dir, 'syft', '''echo "syft $*" >> "$CALLS"
+echo '{"components":[{}]}' > reports/sbom/sbom.cdx.json
+echo '{"packages":[{}]}' > reports/sbom/sbom.spdx.json
+''')
+    stub(bin_dir, 'grype', 'echo "grype $*" >> "$CALLS"\n')
     # Fixture fuyant détecté ; gate vulnérabilités de l'API rouge ; le reste vert.
     stub(bin_dir, 'trivy', '''echo "trivy $*" >> "$CALLS"
 out=""; prev=""
@@ -165,6 +171,9 @@ def test_red_api_gate_still_runs_every_report_and_gate(tmp_path):
             '--skip-db-update --severity') in log
     for name in ['image', 'deps', 'db']:
         assert (workspace / 'reports' / f'trivy-{name}-full.json').exists()
+    assert 'grype sbom:reports/sbom/sbom.cdx.json --config .grype.yaml' in log
+    stats = (workspace / 'reports' / 'sbom-stats.txt').read_text()
+    assert stats.startswith('CycloneDX')
 
 
 # --- build_variant.sh : rien de fuyant parmi les artefacts publiables -------

@@ -1,0 +1,97 @@
+#0 building with "tp2-bench-local-1793278412-arm64" instance using docker-container driver
+
+#1 [internal] load local bake definitions
+#1 reading docker-bake.hcl 2.20kB / 2.20kB done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile:
+#2 transferring dockerfile: 1.95kB done
+#2 DONE 0.0s
+
+#3 resolve image config for docker-image://docker.io/docker/dockerfile:1.27.1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e
+#3 DONE 0.0s
+
+#4 docker-image://docker.io/docker/dockerfile:1.27.1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e
+#4 resolve docker.io/docker/dockerfile:1.27.1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e 0.0s done
+#4 CACHED
+
+#5 [internal] load metadata for cgr.dev/chainguard/python@sha256:49fd266eb8a1331194c318b742087c7a2939cc5794fa64f17feb9e17e12703e2
+#5 DONE 0.0s
+
+#6 [internal] load metadata for cgr.dev/chainguard/python@sha256:dde1a2549dd62864f0263dae8e877680837b4e738a7ecc85c671c55c069848ac
+#6 DONE 0.0s
+
+#7 [internal] load .dockerignore
+#7 transferring context: 467B done
+#7 DONE 0.1s
+
+#8 [internal] setting cache mount permissions
+#8 DONE 0.0s
+
+#9 [builder 1/4] FROM cgr.dev/chainguard/python@sha256:dde1a2549dd62864f0263dae8e877680837b4e738a7ecc85c671c55c069848ac
+#9 resolve cgr.dev/chainguard/python@sha256:dde1a2549dd62864f0263dae8e877680837b4e738a7ecc85c671c55c069848ac 0.0s done
+#9 DONE 0.0s
+
+#10 [stage-1 1/4] FROM cgr.dev/chainguard/python@sha256:49fd266eb8a1331194c318b742087c7a2939cc5794fa64f17feb9e17e12703e2
+#10 resolve cgr.dev/chainguard/python@sha256:49fd266eb8a1331194c318b742087c7a2939cc5794fa64f17feb9e17e12703e2 0.0s done
+#10 DONE 0.0s
+
+#11 [internal] load build context
+#11 transferring context: 2.08kB done
+#11 DONE 0.1s
+
+#12 [builder 2/4] WORKDIR /app
+#12 CACHED
+
+#8 [internal] setting cache mount permissions
+#8 CACHED
+
+#13 [builder 3/4] COPY requirements.txt /app/requirements.txt
+#13 DONE 0.1s
+
+#14 [builder 4/4] RUN --mount=type=cache,target=/home/nonroot/.cache/pip,uid=65532,gid=65532,sharing=locked     --mount=type=secret,id=package_token,required=true,uid=65532,gid=65532,mode=0400     python -c "from pathlib import Path; import sys; sys.exit(0 if Path('/run/secrets/package_token').read_bytes() else 'Build secret package_token must not be empty')"     && test -w "/home/nonroot/.cache/pip"     && python -m venv --without-pip /app/venv     && pip --python /app/venv/bin/python install -r /app/requirements.txt
+#14 0.533 Collecting Flask==3.1.3 (from -r /app/requirements.txt (line 1))
+#14 0.806   Downloading flask-3.1.3-py3-none-any.whl.metadata (3.2 kB)
+#14 0.916 Collecting Werkzeug==3.1.9 (from -r /app/requirements.txt (line 2))
+#14 0.949   Downloading werkzeug-3.1.9-py3-none-any.whl.metadata (4.1 kB)
+#14 1.680 Collecting psycopg2-binary==2.9.13 (from -r /app/requirements.txt (line 3))
+#14 1.744   Downloading psycopg2_binary-2.9.13-cp315-cp315-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl.metadata (4.9 kB)
+#14 1.883 Collecting gunicorn==26.2.0 (from -r /app/requirements.txt (line 4))
+#14 1.919   Downloading gunicorn-26.2.0-py3-none-any.whl.metadata (5.5 kB)
+#14 1.997 Collecting blinker==1.9.0 (from -r /app/requirements.txt (line 5))
+#14 2.025   Downloading blinker-1.9.0-py3-none-any.whl.metadata (1.6 kB)
+#14 2.526 Collecting click==8.5.0 (from -r /app/requirements.txt (line 6))
+#14 2.550   Downloading click-8.5.0-py3-none-any.whl.metadata (2.6 kB)
+#14 2.595 Collecting itsdangerous==2.2.0 (from -r /app/requirements.txt (line 7))
+#14 2.621   Downloading itsdangerous-2.2.0-py3-none-any.whl.metadata (1.9 kB)
+#14 2.673 Collecting Jinja2==3.1.6 (from -r /app/requirements.txt (line 8))
+#14 2.706   Downloading jinja2-3.1.6-py3-none-any.whl.metadata (2.9 kB)
+#14 2.799 Collecting MarkupSafe==3.0.4 (from -r /app/requirements.txt (line 9))
+#14 2.900   Downloading markupsafe-3.0.4-cp315-cp315-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl.metadata (2.7 kB)
+#14 2.943 Downloading flask-3.1.3-py3-none-any.whl (103 kB)
+#14 3.025 Downloading werkzeug-3.1.9-py3-none-any.whl (228 kB)
+#14 3.108 Downloading psycopg2_binary-2.9.13-cp315-cp315-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl (5.9 MB)
+#14 3.495    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 5.9/5.9 MB 15.0 MB/s  0:00:00
+#14 3.527 Downloading gunicorn-26.2.0-py3-none-any.whl (228 kB)
+#14 3.603 Downloading blinker-1.9.0-py3-none-any.whl (8.5 kB)
+#14 3.640 Downloading click-8.5.0-py3-none-any.whl (125 kB)
+#14 3.686 Downloading itsdangerous-2.2.0-py3-none-any.whl (16 kB)
+#14 3.724 Downloading jinja2-3.1.6-py3-none-any.whl (134 kB)
+#14 3.765 Downloading markupsafe-3.0.4-cp315-cp315-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl (24 kB)
+#14 3.826 Installing collected packages: psycopg2-binary, MarkupSafe, itsdangerous, gunicorn, click, blinker, Werkzeug, Jinja2, Flask
+#14 4.165 
+#14 4.166 Successfully installed Flask-3.1.3 Jinja2-3.1.6 MarkupSafe-3.0.4 Werkzeug-3.1.9 blinker-1.9.0 click-8.5.0 gunicorn-26.2.0 itsdangerous-2.2.0 psycopg2-binary-2.9.13
+#14 DONE 4.3s
+
+#10 [stage-1 1/4] FROM cgr.dev/chainguard/python@sha256:49fd266eb8a1331194c318b742087c7a2939cc5794fa64f17feb9e17e12703e2
+#10 CACHED
+
+#15 [stage-1 2/4] COPY --from=builder --chown=0:0 /app/venv /app/venv
+#15 DONE 0.1s
+
+#16 [stage-1 3/4] COPY app.py /app/app.py
+#16 DONE 0.0s
+
+#17 [stage-1 4/4] WORKDIR /app
+#17 DONE 0.0s

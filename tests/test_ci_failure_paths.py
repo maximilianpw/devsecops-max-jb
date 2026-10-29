@@ -84,7 +84,7 @@ elif 'exec' in args:
 
 
 @pytest.mark.parametrize('failure', [
-    'api-gate', 'dependency-report', 'db-gate', 'none',
+    'api-gate', 'dependency-report', 'db-gate', 'grype-gate', 'empty-sbom', 'none',
 ])
 def test_scans_collect_remaining_reports_and_gates(sandbox, failure):
     root, env = sandbox
@@ -92,6 +92,23 @@ def test_scans_collect_remaining_reports_and_gates(sandbox, failure):
     # Archive verification remains a fail-fast prerequisite, outside scan aggregation.
     (root / 'scripts/ci/load_verified_image.sh').write_text('#!/bin/sh\nexit 0\n')
     stub(root, 'dive', 'raise SystemExit(0)\n')
+    stub(root, 'syft', r'''import json, os, sys
+from pathlib import Path
+args = sys.argv[1:]
+with open(os.environ['CALLS'], 'a') as out:
+    out.write(json.dumps(args) + '\n')
+empty = os.environ['FAIL_SCAN'] == 'empty-sbom'
+documents = {'cyclonedx-json': {'components': [] if empty else [{'purl': 'pkg:x'}]},
+             'spdx-json': {'packages': [] if empty else [{'licenseConcluded': 'MIT'}]}}
+for value in args[args.index('-o') + 1::2]:
+    fmt, path = value.split('=', 1)
+    Path(path).write_text(json.dumps(documents[fmt]))
+''')
+    stub(root, 'grype', r'''import json, os, sys
+with open(os.environ['CALLS'], 'a') as out:
+    out.write(json.dumps(sys.argv[1:]) + '\n')
+sys.exit(1 if os.environ['FAIL_SCAN'] == 'grype-gate' else 0)
+''')
     stub(root, 'docker', 'print(\'{"services":{"db":{"image":"postgres@test"}}}\')\n')
     stub(root, 'trivy', r'''import json, os, sys
 from pathlib import Path
@@ -123,6 +140,8 @@ if failure == 'db-gate' and '--image-src' in args and '--exit-code' in args:
     assert any(call[0] == 'fs' and 'vuln' in call and '--exit-code' in call
                for call in recorded)
     assert any('--image-src' in call and '--exit-code' in call for call in recorded)
+    assert ['sbom:reports/sbom/sbom.cdx.json', '--config', '.grype.yaml'] in recorded
+    assert any('--only-fixed=false' in call for call in recorded)
 
 
 def make_image(path):

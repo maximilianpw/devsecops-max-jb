@@ -19,8 +19,8 @@ L'API est servie par gunicorn sur le port 5000 et lit `DB_HOST`, `DB_PORT`,
 > après `v1.0.0` ([run 37777799398](https://github.com/maximilianpw/devsecops-max-jb/actions/runs/37777799398)). Les sorties brutes des mesures locales
 > sont dans [`evidence/`](evidence/). Chaque mesure indique sa date, sa
 > commande et la version de l'outil. Le TP2 (build Bake, secret BuildKit,
-> amd64 + arm64, index multi-plateforme) est décrit au § 8 ; aucune release
-> multi-architecture n'est encore publiée.
+> amd64 + arm64, index multi-plateforme) est décrit au § 8, le SBOM, Grype et
+> le VEX au § 9 ; aucune release multi-architecture n'est encore publiée.
 
 ## 1. Packages GHCR publics
 
@@ -583,7 +583,7 @@ preuves versionnées dans `evidence/after/` restent inchangés.
 
 Répartition : Max a écrit le Dockerfile et [`docker-bake.hcl`](docker-bake.hcl)
 (PR #8). JB a adapté les politiques, la CI, la publication et les preuves.
-Ce TP2 n'ajoute ni SBOM, ni VEX, ni signature.
+SBOM, Grype et VEX : § 9.
 
 ### Build avec Bake
 
@@ -648,6 +648,18 @@ fin de build.
   (`Using cached`, aucun `Downloading`). `--no-cache` ne convient pas pour
   cette preuve : BuildKit ignore alors aussi le montage cache (vérifié :
   18 téléchargements).
+- **Temps de build** (`scripts/evidence/tp2.sh bench`, arm64 natif, builder
+  `docker-container` neuf démarré avant la mesure, deux exécutions) :
+
+  | Build | Exécution 1 | Exécution 2 | pip |
+  | --- | --- | --- | --- |
+  | À froid (aucun cache) | 26,7 s | 27,5 s | 18 `Downloading` |
+  | Dépendance modifiée, cache pip conservé | 2,1 s | 1,7 s | 18 `Using cached`, 0 `Downloading` |
+  | Même modification, cache pip purgé (`prune --filter type=exec.cachemount`) | 5,3 s | 3,6 s | 18 `Downloading` |
+
+  Seule la couche pip est reconstruite dans les deux derniers cas (images de
+  base `CACHED`). Le build à froid est dominé par le pull des images de base ;
+  le gain du cache pip croît avec la latence réseau, faible sur ce poste.
 - **Couches** : `CACHE_REF` active l'import et l'export registre en `mode=max`
   déclarés dans le HCL. La CI ne l'utilise pas : aucune écriture distante,
   donc aucune PR ou fork ne peut empoisonner un cache de confiance. Preuve :
@@ -720,7 +732,7 @@ registre jetable. Aucune image de test n'a été poussée sur GHCR.
 
 ### Preuves TP2
 
-[`scripts/evidence/tp2.sh`](scripts/evidence/tp2.sh) (étapes `build run scan`)
+[`scripts/evidence/tp2.sh`](scripts/evidence/tp2.sh) (étapes `build run scan bench`)
 écrit dans `evidence/tp2/<run>-<arch>/` : environnement (commit, versions
 Docker, Buildx, Compose), logs de build, du cache pip et du cache de couches,
 métadonnées, intégration. Les mesures TP1 de `evidence/after/` sont conservées.
@@ -743,12 +755,128 @@ Image IDs testés puis scannés : amd64 `sha256:253721ca…`, arm64
 
 Preuves locales : `evidence/tp2/local-1793025514-arm64/` et `evidence/tp2/local-1793025818-amd64/`. Environnement : macOS arm64, Docker 29.5.3 (containerd image store),
 Buildx 0.34.1, BuildKit 0.33.1 (builder `docker-container`), le 2026-10-26.
+Benchmark : `evidence/tp2/local-1793278412-arm64/` et
+`evidence/tp2/local-1793278449-arm64/` (`timings.txt`, logs `bench-*`), Docker
+29.8.2, Buildx 0.37.2, BuildKit 0.33.1, le 2026-10-29.
+
+## 9. TP2 — SBOM, Grype et VEX
+
+### Inventaire (SBOM)
+
+Le job de scan de chaque architecture génère l'inventaire depuis l'archive
+**vérifiée** (`load_verified_image.sh`), par analyse statique, sans lancer le
+conteneur ([`scan_variant.sh`](scripts/ci/scan_variant.sh)) :
+
+```bash
+syft scan docker-archive:dist/image.tar \
+  -o cyclonedx-json=reports/sbom/sbom.cdx.json \
+  -o spdx-json=reports/sbom/sbom.spdx.json
+```
+
+Les deux fichiers sont publiés dans l'artefact `sbom-<arch>-<tentative>`
+(output `sbom-artifact-id` de `tp2-scan.yaml`), et copiés à la racine du dépôt
+pour la release. [`sbom_stats.sh`](scripts/ci/sbom_stats.sh) en extrait les
+statistiques (`reports/sbom-stats.txt`) et échoue sur un inventaire vide :
+
+```bash
+jq '.components | length' sbom.cdx.json                                   # 1906
+jq -r '.components | group_by(.type)[] | "\(.[0].type) \(length)"' sbom.cdx.json
+jq '.packages | length' sbom.spdx.json                                    # 40
+jq -r '.components[].purl // empty' sbom.cdx.json | sort -u               # 39 PURL
+jq -r '[.components[].licenses[]? | .license.id // .license.name // .expression] | unique[]' sbom.cdx.json
+jq -r '[.packages[] | .licenseConcluded, .licenseDeclared]
+       | map(select(. != null and . != "NOASSERTION")) | unique[]' sbom.spdx.json
+```
+
+Résultats (Syft 1.54.1, identiques sur amd64 et arm64 au `arch=` des PURL près) :
+
+| Mesure | CycloneDX | SPDX |
+| --- | --- | --- |
+| Entrées | 1906 composants : 39 `library`, 1 `operating-system` (Wolfi), 1866 `file` | 40 paquets : les 39 mêmes + l'image racine |
+| PURL uniques | 39 : 30 `pkg:apk/wolfi`, 9 `pkg:pypi` | 39 + le `pkg:oci` de l'image |
+| Licences distinctes | 13 | 13 (expressions composées entre parenthèses, `LicenseRef-LGPL-with-exceptions`) |
+
+Les écarts viennent du format : CycloneDX range les fichiers catalogués parmi
+les composants, SPDX les met dans `files` et ajoute l'image comme paquet.
+
+- Paquets Python : flask 3.1.3, werkzeug 3.1.9, gunicorn 26.2.0,
+  psycopg2-binary 2.9.13, jinja2 3.1.6, markupsafe 3.0.4, click 8.5.0,
+  itsdangerous 2.2.0, blinker 1.9.0.
+- Licences : Apache-2.0, BSD-2-Clause, BSD-3-Clause, MIT, PSF-2.0,
+  LGPL-2.1-or-later, GPL-3.0-or-later (dont `WITH GCC-exception-3.1`),
+  MPL-2.0 AND MIT, blessing, LGPL with exceptions, et deux expressions
+  composées (glibc, outils système). Les licences GPL concernent des paquets
+  système Wolfi utilisés comme bibliothèques ou outils, pas le code de l'API.
+
+### Scan du SBOM et gouvernance VEX
+
+Second scan, indépendant de Trivy : Grype 0.120.1 corrèle le SBOM CycloneDX,
+sans relire l'image. [`.grype.yaml`](.grype.yaml) porte la politique :
+
+```yaml
+only-fixed: true          # seules les failles corrigibles bloquent
+fail-on-severity: high    # HIGH et CRITICAL
+vex-documents:
+  - security.vex.json
+```
+
+```bash
+grype sbom:reports/sbom/sbom.cdx.json --config .grype.yaml          # gate (code 2 si échec)
+GRYPE_FAIL_ON_SEVERITY= grype sbom:reports/sbom/sbom.cdx.json \
+  --only-fixed=false -o json --file reports/grype-full.json         # rapport complet
+```
+
+Grype charge `.grype.yaml` depuis le répertoire courant : le rapport complet
+lève seulement le seuil et `only-fixed`, et garde donc le VEX. Contrôle
+négatif : un SBOM contenant `pkg:pypi/werkzeug@2.2.2` fait échouer le gate
+(2 HIGH corrigibles, code 2).
+
+Toutes sévérités, sans VEX, Grype trouve une seule faille, sur les deux
+architectures :
+
+| CVE | Paquet | Sévérité | Correctif | EPSS |
+| --- | --- | --- | --- | --- |
+| CVE-2026-114583 | `python-3.15` 3.15.0_git20261017-r4 (apk Wolfi) | Medium | aucun | 0,2 % |
+
+Elle ne bloquerait pas le gate (Medium, sans correctif). Elle est néanmoins
+qualifiée dans [`security.vex.json`](security.vex.json) (OpenVEX v0.2.0) pour
+ne pas rester un bruit ignoré sans justification :
+
+```
+sans VEX : python-3.15  3.15.0_git20261017-r4  apk  CVE-2026-114583  Medium
+avec VEX : python-3.15  3.15.0_git20261017-r4  apk  CVE-2026-114583  Medium  (suppressed by VEX)
+           ignoredMatches[].appliedIgnoreRules = [{"namespace": "vex", "vex-status": "not_affected"}]
+```
+
+L'énoncé vise le PURL du paquet, `pkg:apk/wolfi/python-3.15@3.15.0_git20261017-r4`,
+sans qualificatifs. Grype n'applique pas un produit désigné par l'image
+(nom, `pkg:oci`, digest) quand il scanne un SBOM ; le PURL du paquet, lui, est
+stable d'un run à l'autre et commun aux deux architectures. La version est
+contrôlée : `-r3` ne correspond pas.
+
+**Justification technique** (`vulnerable_code_not_in_execute_path`) : la
+faille contourne `tarfile.tar_filter`, et seul `tarfile.extractall()` avec
+`filter="tar"` permet d'écrire hors du répertoire cible. Le module fait partie
+de la bibliothèque standard présente dans l'image, mais aucun fichier Python
+de `/app` (app.py, Flask, Werkzeug, gunicorn, psycopg2, Jinja2…) n'importe
+`tarfile`. L'API n'expose que `/health`, `/hello` et `/dbtest`, et ne reçoit
+ni n'extrait aucune archive. L'image runtime n'a ni pip, ni shell, ni binaire
+`tar` ; elle tourne en UID 65532, sur un système de fichiers en lecture seule,
+avec `cap_drop: ALL` et `no-new-privileges`.
+
+**Justification métier** : risque accepté. La sévérité est Medium, l'EPSS de
+0,2 %, aucun correctif Wolfi n'existe, et le code n'est pas atteignable :
+bloquer la livraison ne réduirait aucun risque. L'énoncé est lié à la version
+exacte du paquet. Une mise à jour de l'image de base le rend caduc et la CVE
+réapparaît dans le rapport complet, ce qui impose une nouvelle revue. Revue au
+plus tard le 2026-11-29, ou plus tôt si un correctif paraît ou si l'API
+commence à traiter des archives.
 
 ## Reproduction locale
 
 Prérequis : Docker avec Compose v2, Buildx (Bake, builder `docker-container`)
 et BuildKit, openssl, Python 3.15, Hadolint
-2.15.1, Dive 0.13.1, Trivy 0.75.0.
+2.15.1, Dive 0.13.1, Trivy 0.75.0, Syft 1.54.1, Grype 0.120.1.
 
 ```bash
 # Qualité et tests unitaires (sans base)
@@ -765,6 +893,7 @@ docker compose config --no-interpolate --format json \
 # Chaîne TP2 complète d'une architecture (jeton factice éphémère, preuves
 # secret/cache, Compose, Dive, Trivy) -> evidence/tp2/<run>-<arch>/
 ARCH=arm64 scripts/evidence/tp2.sh build run scan
+ARCH=arm64 scripts/evidence/tp2.sh bench   # temps à froid / cache pip / sans cache pip
 
 # Ou build seul (jeton factice : § 8), Dive, Trivy
 CI_PLATFORM=linux/amd64 docker buildx bake app-ci   # charge flask-api:local
@@ -772,6 +901,9 @@ dive --ci --ci-config .dive-ci flask-api:local
 docker save -o image.tar flask-api:local
 trivy image --input image.tar --scanners vuln \
   --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1
+syft scan docker-archive:image.tar -o cyclonedx-json=sbom.cdx.json -o spdx-json=sbom.spdx.json
+scripts/ci/sbom_stats.sh sbom.cdx.json sbom.spdx.json
+grype sbom:sbom.cdx.json --config .grype.yaml
 
 # Stack réelle et tests HTTP
 cp .env.example .env   # DB_USER / DB_NAME (valeurs locales uniquement)
