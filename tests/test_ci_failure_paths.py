@@ -501,9 +501,14 @@ def test_admission_requires_every_expected_output(release, missing):
 def test_sbom_of_another_arch_stops_the_release_before_publication(
         tmp_path, sbom_arch):
     # Real Syft output: the arm64 SBOM must not validate the amd64 image.
+    sbom = json.loads((SBOMS / f'{sbom_arch}.cdx.json').read_text())
+    image = json.loads((SBOMS / f'{sbom_arch}.image.json').read_text())
+    sbom['metadata']['component']['version'] = image['image_id']
+    source = tmp_path / 'sbom.cdx.json'
+    source.write_text(json.dumps(sbom))
     result = subprocess.run([
         sys.executable, str(ROOT / 'scripts/ci/sbom_identity.py'), 'verify',
-        '--sbom', str(SBOMS / f'{sbom_arch}.cdx.json'),
+        '--sbom', str(source),
         '--image-json', str(SBOMS / 'amd64.image.json'), '--arch', 'amd64',
         '--github-output', str(tmp_path / 'out')], capture_output=True)
     accepted = sbom_arch == 'amd64'
@@ -569,10 +574,10 @@ def make_layered_image(path, arch, marker):
     return 'sha256:' + hashlib.sha256(config).hexdigest(), diff_id
 
 
-def sbom_for(diff_id):
+def sbom_for(diff_id, image_id):
     return {'bomFormat': 'CycloneDX', 'specVersion': '1.7',
             'metadata': {'component': {'type': 'container', 'name': 'image.tar',
-                                       'version': 'sha256:' + 'f' * 64}},
+                                       'version': image_id}},
             'components': [{'name': 'busybox', 'properties': [
                 {'name': 'syft:location:0:layerID', 'value': diff_id}]}]}
 
@@ -589,7 +594,7 @@ def sbom_release(sandbox):
             root / 'dist' / arch / 'image.tar', arch, arch)
         for name in ('sbom.cdx.json', 'sbom.spdx.json'):
             (root / 'dist/sbom' / arch / name).write_text(
-                json.dumps(sbom_for(diff_id)))
+                json.dumps(sbom_for(diff_id, ids[arch])))
     stub(root, 'curl', r"""import os, sys
 args = sys.argv[1:]
 open(args[args.index('-o') + 1], 'w').write(os.environ['ARTIFACT_JSON'])

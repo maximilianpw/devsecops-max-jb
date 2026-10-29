@@ -35,15 +35,18 @@ sbom_identity = load('sbom_identity')
 
 
 def fixture(arch):
-    return (json.loads((FIXTURES / f'{arch}.cdx.json').read_text()),
-            json.loads((FIXTURES / f'{arch}.image.json').read_text()))
+    sbom = json.loads((FIXTURES / f'{arch}.cdx.json').read_text())
+    image = json.loads((FIXTURES / f'{arch}.image.json').read_text())
+    # Simule la convention --source-version sans altérer la fixture brute Syft.
+    sbom['metadata']['component']['version'] = image['image_id']
+    return sbom, image
 
 
 def test_real_syft_sbom_matches_its_own_image():
     sbom, image = fixture('amd64')
     result = sbom_identity.check_sbom(sbom, image, 'amd64')
     assert result['components'] == len(sbom['components'])
-    assert result['identity'] == 'layers'
+    assert result['identity'] == 'config-digest'
     assert re.fullmatch(r'[0-9a-f]{64}', result['sha256'])
 
 
@@ -67,12 +70,13 @@ def test_syft_does_not_carry_the_config_digest():
     # Constat sur la sortie réelle de Syft 1.55.0 : metadata.component.version est
     # un digest de manifeste propre à Syft, pas le config digest de l'image.
     sbom, image = fixture('amd64')
+    sbom = json.loads((FIXTURES / 'amd64.cdx.json').read_text())
     version = sbom['metadata']['component']['version']
     assert version != image['image_id']
     with pytest.raises(ValueError, match='config digest'):
-        sbom_identity.check_sbom(sbom, image, 'amd64', require_config_digest=True)
+        sbom_identity.check_sbom(sbom, image, 'amd64')
     sbom['metadata']['component']['version'] = image['image_id']
-    result = sbom_identity.check_sbom(sbom, image, 'amd64', require_config_digest=True)
+    result = sbom_identity.check_sbom(sbom, image, 'amd64')
     assert result['identity'] == 'config-digest'
 
 
@@ -264,11 +268,12 @@ def prepare_arch(root, env, arch):
     run(['docker', 'save', '--platform', f'linux/{arch}', '-o',
          f'dist/{arch}/image.tar', 'busybox:1.37'], root, env)
     sbom = f'dist/sbom/{arch}/sbom.cdx.json'
-    run(['syft', 'scan', f'docker-archive:dist/{arch}/image.tar', '-o',
-         f'cyclonedx-json={sbom}', '-q'], root, env)
     image = run(['python3', 'scripts/ci/image_archive.py', 'describe',
                  f'dist/{arch}/image.tar'], root, env).stdout
     (root / f'{arch}.json').write_text(image)
+    run(['syft', 'scan', f'docker-archive:dist/{arch}/image.tar',
+         '--source-version', json.loads(image)['image_id'], '-o',
+         f'cyclonedx-json={sbom}', '-q'], root, env)
     run(['python3', 'scripts/ci/sbom_identity.py', 'verify', '--sbom', sbom,
          '--image-json', f'{arch}.json', '--arch', arch,
          '--github-output', f'{arch}.out'], root, env)
@@ -321,3 +326,12 @@ def test_local_registry_key_mode(tmp_path):
     run(['crane', 'tag', f'{env["REPOSITORY"]}@{env["AMD64_DIGEST"]}', '1'],
         tmp_path, env)
     assert run(admit, tmp_path, env, check=False).returncode != 0
+
+
+def test_sbom_rejects_another_image_sharing_dependency_layers():
+    sbom, image = fixture('amd64')
+    sbom['metadata']['component']['version'] = image['image_id']
+    image['image_id'] = 'sha256:' + 'f' * 64
+    image['diff_ids'].append('sha256:' + 'e' * 64)
+    with pytest.raises(ValueError, match='config digest'):
+        sbom_identity.check_sbom(sbom, image, 'amd64')

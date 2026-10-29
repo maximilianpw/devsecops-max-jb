@@ -1001,7 +1001,7 @@ seulement l'attestation CycloneDX.
 | Étape | Job | Contrôle |
 | --- | --- | --- |
 | Identité de l'artefact SBOM | `release` | API GitHub : ID, nom `sbom-<arch>-<tentative>`, run, commit, non expiré ([`verify_sbom.sh`](scripts/ci/verify_sbom.sh)) |
-| SBOM = image de cette architecture | `release` | CycloneDX valide, `metadata.component` de type `container`, couches citées par Syft ⊆ DiffIDs de l'archive vérifiée ([`sbom_identity.py`](scripts/ci/sbom_identity.py)) |
+| SBOM = image de cette architecture | `release` | CycloneDX valide, `metadata.component` de type `container`, version du composant = config digest et couches citées par Syft ⊆ DiffIDs de l'archive vérifiée ([`sbom_identity.py`](scripts/ci/sbom_identity.py)) |
 | Digests présents | `release` | trois digests `sha256:` distincts, index = exactement amd64 + arm64, **avant** tout appel à Cosign |
 | Signature + attestations | `release` | `cosign sign --recursive` sur l'index, `cosign attest --type cyclonedx` sur chaque manifeste |
 | Admission | `admission` | `cosign verify` (index et manifestes), `cosign verify-attestation`, sujet = manifeste attendu, prédicat = SBOM validée en CI (nombre de composants et empreinte du JSON canonique), tags → index signé |
@@ -1011,15 +1011,13 @@ nombre de composants et l'empreinte SBOM attendus sont des outputs du job
 `release` du même run, calculés après validation. La SBOM attestée est donc
 comparée octet pour octet (JSON canonique) à celle validée en CI.
 
-**Identité SBOM : limite de Syft.** Sur une archive Docker, Syft n'écrit pas le
-config digest de l'image dans CycloneDX : `metadata.component.version` est un
-digest de manifeste propre à Syft (constaté sur la sortie réelle de Syft 1.55.0,
-fixtures dans [`tests/fixtures/sbom`](tests/fixtures/sbom)). L'identité repose donc
-sur les DiffIDs des couches où Syft a trouvé des paquets : une SBOM de l'autre
-architecture est rejetée. Si la SBOM est générée avec
-`--source-version <image-id>`, le config digest peut être exigé en plus
-(`SBOM_REQUIRE_CONFIG_DIGEST=true`), mais cela suppose cette convention côté
-génération.
+**Contrat obligatoire avec le producteur SBOM.** Syft doit générer la SBOM
+avec `--source-version <image-id>`, où `<image-id>` est le config digest de
+l'archive vérifiée. `metadata.component.version` doit correspondre exactement
+à cet identifiant. Une SBOM sans cette liaison est rejetée avant publication,
+même si ses couches de dépendances appartiennent à l'image. La sortie brute de
+Syft utilise un autre digest ; les fixtures conservent ce cas de rejet.
+Ce contrat doit être intégré avec Max avant de lancer une release.
 
 ### Cosign 3.1.4 et format des bundles
 

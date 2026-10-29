@@ -33,5 +33,4 @@ assert json.load(open(sys.argv[1]))['image_id'] == sys.argv[2], 'image ≠ outpu
 PY
 args=(--sbom "$sbom_dir/sbom.cdx.json" --image-json "$work/image.json" --arch "$arch"
   --github-output "$GITHUB_OUTPUT")
-[ "${SBOM_REQUIRE_CONFIG_DIGEST:-false}" = true ] && args+=(--require-config-digest)
 python3 "$ci/sbom_identity.py" verify "${args[@]}"

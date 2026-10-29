@@ -58,16 +58,12 @@ def layer_ids(components):
     return found
 
 
-def check_sbom(sbom, image, arch, require_config_digest=False):
+def check_sbom(sbom, image, arch):
     """Vérifie que la SBOM décrit l'image vérifiée de cette architecture.
 
-    ``image`` est la sortie de ``image_archive.py describe`` de l'archive
-    vérifiée. Syft n'écrit pas le config digest dans CycloneDX : sur une
-    archive Docker, ``metadata.component.version`` est un digest de manifeste
-    propre à Syft. L'identité repose donc sur les DiffIDs des couches où Syft a
-    trouvé des paquets, qui diffèrent d'une architecture à l'autre. Le config
-    digest n'est exigé que si la SBOM est générée avec
-    ``--source-version <image-id>``.
+    La version du composant doit être le config digest de l'archive vérifiée.
+    Le producteur Syft fournit ``--source-version <image-id>`` ; les DiffIDs
+    constituent un contrôle supplémentaire, jamais une identité suffisante.
     """
     if image['platform'] != 'linux/' + arch:
         raise ValueError('archive d’une autre plateforme que celle attendue')
@@ -88,15 +84,14 @@ def check_sbom(sbom, image, arch, require_config_digest=False):
             f'{len(unknown)} couche(s) de la SBOM absentes de l’image {arch} '
             '(SBOM d’une autre image ou architecture)')
     version = component.get('version')
-    by_config = version == image['image_id']
-    if require_config_digest and not by_config:
-        raise ValueError('metadata.component.version ≠ config digest de l’image')
-    if version is not None and not SHA256.fullmatch(str(version)):
+    if not SHA256.fullmatch(str(version)):
         raise ValueError('metadata.component.version n’est pas un digest sha256')
+    if version != image['image_id']:
+        raise ValueError('metadata.component.version ≠ config digest de l’image')
     return {
         'components': len(components),
         'sha256': canonical_sha256(sbom),
-        'identity': 'config-digest' if by_config else 'layers',
+        'identity': 'config-digest',
     }
 
 
@@ -141,7 +136,6 @@ def main():
     ver.add_argument('--sbom', required=True)
     ver.add_argument('--image-json', required=True)
     ver.add_argument('--arch', required=True, choices=['amd64', 'arm64'])
-    ver.add_argument('--require-config-digest', action='store_true')
     ver.add_argument('--github-output')
     att = sub.add_parser('attestation')
     att.add_argument('--verify-output', required=True)
@@ -160,7 +154,7 @@ def main():
         elif args.command == 'verify':
             with open(args.sbom) as stream, open(args.image_json) as image:
                 result = check_sbom(json.load(stream), json.load(image),
-                                    args.arch, args.require_config_digest)
+                                    args.arch)
             if args.github_output:
                 with open(args.github_output, 'a') as out:
                     out.write(f'components={result["components"]}\n'
