@@ -4,22 +4,9 @@ set -euo pipefail
 : "${REPOSITORY:?}" "${VERSION:?}" "${MINOR:?}" "${MAJOR:?}"
 : "${AMD64_ID:?}" "${ARM64_ID:?}" "${GITHUB_RUN_ID:?}" "${GITHUB_RUN_ATTEMPT:?}"
 work=$(mktemp -d)
-index_digest=""
-# Les trois tags sont posés l'un après l'autre : un échec peut laisser un état
-# partiel. Le rapporter (lecture seule) pour la reprise documentée au README § 8.
-report() {
-  rc=$?
-  trap - EXIT
-  if [ "$rc" -ne 0 ]; then
-    echo "Release interrompue ; index candidat : ${index_digest:-non créé}" >&2
-    for tag in "$VERSION" "$MINOR" "$MAJOR"; do
-      echo "  $REPOSITORY:$tag -> $(crane digest "$REPOSITORY:$tag" 2>/dev/null || echo 'absent ou illisible')" >&2
-    done
-  fi
-  rm -rf "$work"
-  exit "$rc"
-}
-trap report EXIT
+# Aucun tag de release ici : seules des refs staging propres au run sont écrites.
+# Les tags sont posés par promote_tags.sh, après signature et admission.
+trap 'rm -rf "$work"' EXIT
 # Une panne d’auth/réseau n’est jamais une preuve d’absence.
 if crane digest "$REPOSITORY:$VERSION" > "$work/existing" 2> "$work/error"; then
   echo 'Version déjà publiée : réécriture interdite' >&2; exit 1
@@ -51,9 +38,10 @@ docker buildx imagetools create -t "$candidate" "$REPOSITORY@$amd64_digest" "$RE
 crane manifest "$candidate" > "$work/index.json"
 python3 scripts/ci/check_index.py "$work/index.json" "$amd64_digest" "$arm64_digest"
 index_digest=$(crane digest "$candidate")
-for tag in "$VERSION" "$MINOR" "$MAJOR"; do
-  crane tag "$REPOSITORY@$index_digest" "$tag"
-  test "$(crane digest "$REPOSITORY:$tag")" = "$index_digest"
-done
-printf 'digest=%s\n' "$index_digest" >> "$GITHUB_OUTPUT"
-echo "Index publié et tags vérifiés : $index_digest"
+# Les digests par plateforme servent à l'attestation SBOM (une par manifeste).
+{
+  printf 'digest=%s\n' "$index_digest"
+  printf 'amd64_digest=%s\n' "$amd64_digest"
+  printf 'arm64_digest=%s\n' "$arm64_digest"
+} >> "$GITHUB_OUTPUT"
+echo "Index candidat publié et vérifié, sans tag de release : $index_digest"

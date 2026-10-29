@@ -10,6 +10,13 @@ install_archive() {
   tar -xzf "$work/archive.tgz" -C "$work" "$binary"
   sudo install -m 0755 "$work/$binary" "/usr/local/bin/$binary"
 }
+# Binaire livré tel quel (Cosign) : même contrôle SHA256 avant installation.
+install_binary() {
+  local url=$1 checksum=$2 name=$3
+  curl --retry 3 -fsSL "$url" -o "$work/$name"
+  printf '%s  %s\n' "$checksum" "$work/$name" | sha256sum --check --strict
+  sudo install -m 0755 "$work/$name" "/usr/local/bin/$name"
+}
 for tool in "$@"; do
   case "$tool" in
     dive) install_archive https://github.com/wagoodman/dive/releases/download/v0.13.1/dive_0.13.1_linux_amd64.tar.gz 0970549eb4a306f8825a84145a2534153badb4d7dcf3febd1967c706367c3d0e dive ;;
@@ -17,6 +24,7 @@ for tool in "$@"; do
     syft) install_archive https://github.com/anchore/syft/releases/download/v1.54.1/syft_1.54.1_linux_amd64.tar.gz c069905b391cc4c20a5ba65ad5c10be2a7ba074f8ea6ad203e24d14e303dad47 syft ;;
     grype) install_archive https://github.com/anchore/grype/releases/download/v0.120.1/grype_0.120.1_linux_amd64.tar.gz 0a9ee97ef5ae2ee953b0a80098105052e846cdbe319a57d808b519c33cd1343d grype ;;
     crane) install_archive https://github.com/google/go-containerregistry/releases/download/v0.22.1/go-containerregistry_Linux_x86_64.tar.gz 0ab7a1d6932a213aed964ce97666c3077fe691c8606413674a8b3e0b9ec4cda0 crane ;;
+    cosign) install_binary https://github.com/sigstore/cosign/releases/download/v3.1.4/cosign-linux-amd64 424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa cosign ;;
     *) echo 'Outil inconnu' >&2; exit 1 ;;
   esac
 done

@@ -161,7 +161,8 @@ def test_red_api_gate_still_runs_every_report_and_gate(tmp_path):
         ['bash', 'scripts/ci/scan_variant.sh'], cwd=workspace,
         capture_output=True, text=True,
         env=env_with(tmp_path, bin_dir, IMAGE='flask-api:test',
-                     EXPECTED_PLATFORM='linux/arm64'),
+                     EXPECTED_PLATFORM='linux/arm64',
+                     EXPECTED_IMAGE_ID='sha256:' + 'd' * 64),
     )
     assert result.returncode == 1
     assert 'trivy-image' in result.stderr and 'trivy-deps' not in result.stderr

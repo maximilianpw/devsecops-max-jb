@@ -43,6 +43,11 @@ variable "CACHE_REF" {
   }
 }
 
+variable "CACHE_EXPORT" {
+  default     = false
+  description = "Exporte le cache vers CACHE_REF ; la CI ne l'active que sur push de confiance, après audit local."
+}
+
 group "default" {
   targets = ["app"]
 }
@@ -56,7 +61,10 @@ target "app" {
 
   # Les caches de couches ne transportent pas le contenu du montage cache pip.
   cache-from = CACHE_REF != "" ? ["type=registry,ref=${CACHE_REF}"] : []
-  cache-to   = CACHE_REF != "" ? ["type=registry,ref=${CACHE_REF},mode=max"] : []
+  # Manifeste d'image (et non index) en gzip : format relu par audit_registry_cache.py.
+  cache-to = CACHE_REF != "" && CACHE_EXPORT ? [
+    "type=registry,ref=${CACHE_REF},mode=max,image-manifest=true,oci-mediatypes=true,compression=gzip,force-compression=true"
+  ] : []
 
   # Pas de push implicite ; l'archive OCI conserve les deux plateformes.
   output = ["type=oci,dest=dist/app.oci.tar"]

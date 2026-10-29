@@ -347,8 +347,8 @@ Graphe du workflow :
 ```text
 Flake8 + tests unitaires ─┐  ┌─ build-amd64 (ubuntu-24.04)     ─ scan-amd64 ─┐   ┌─ BuildKit + Dive ─┐
                           ├──┤                                               ├───┼─ Trivy ───────────┼─ Publish validated multi-platform index
-Hadolint + pinning ───────┘  └─ build-arm64 (ubuntu-24.04-arm) ─ scan-arm64 ─┘   └─ Compose + pytest ─┘     └─ Anonymous pull and native smoke test
-                                                                       (publication : tags vX.Y.Z uniquement)
+Hadolint + pinning ───────┘  └─ build-arm64 (ubuntu-24.04-arm) ─ scan-arm64 ─┘   └─ Compose + pytest ─┘     └─ Signature and SBOM admission ─ Promote admitted index to release tags ─ Anonymous pull and native smoke test
+                                                                       (publication, signature, admission, tags : tags vX.Y.Z uniquement)
 ```
 
 `build-*` = Bake, preuves secret/cache et intégration Compose native ;
@@ -362,8 +362,11 @@ Un job sauté, annulé ou absent les fait échouer.
   `pull_request_target`), tags `vX.Y.Z`. Les PR et les pushes valident sans
   publier.
 - **Permissions** : `permissions: {}` au niveau du workflow ;
-  `contents: read` par job ; `packages: write` uniquement pour le job de
-  release ; aucune permission pour la vérification publique.
+  `contents: read` par job. `packages: write` : jobs de release et de
+  promotion, et les deux jobs de build (plafond transmis aux workflows réutilisables ; seul le job
+  `trusted` reçoit cette permission, § 8) ; `id-token: write` (OIDC Sigstore) et
+  `actions: read` (identité des artefacts SBOM) : job de release seulement ;
+  `permissions: {}` pour `admission` et la vérification publique.
   `persist-credentials: false` sur chaque checkout.
 - **Pinning** : actions externes référencées par SHA complet (version en
   commentaire), vérifié par la CI. Hadolint 2.15.1, Dive 0.13.1 et Trivy
@@ -448,11 +451,23 @@ Un job sauté, annulé ou absent les fait échouer.
   - refus si `X.Y.Z` existe déjà sur GHCR ; une erreur d'authentification
     ou réseau n'est jamais prise pour « tag absent » ;
   - authentification par `GITHUB_TOKEN` ;
-  - publication d'un index multi-plateforme, puis contrôle que `X.Y.Z`, `X.Y`
-    et `X` pointent vers son digest.
-  - Le job suivant fait, sur chaque architecture, un `docker pull` anonyme
-    par tag et par digest, un smoke test sur `/health` et le contrôle du
-    config digest attendu.
+  - validation de la SBOM CycloneDX de chaque architecture **avant** toute
+    publication (§ 10) ;
+  - publication d'un index multi-plateforme candidat, **sans tag de
+    release** (refs `staging-*` seulement) ;
+  - signature Cosign de cet index (récursive : index et deux manifestes) et
+    attestation de la SBOM de chaque manifeste, **toujours par digest**,
+    dans le même job et le même workflow `ci.yaml` (§ 10).
+  - Le job `Signature and SBOM admission` (`permissions: {}`, lectures
+    publiques seulement, bloquant, sans `continue-on-error`) revérifie
+    signature, identité et attestations depuis un runner vierge.
+  - Seulement ensuite, le job `Promote admitted index to release tags` pose
+    `X.Y.Z`, `X.Y` et `X` sur le digest admis et vérifie chacun : aucun tag
+    de release ne désigne jamais une image non signée ou non admise.
+  - Le job suivant, qui en dépend, fait sur chaque architecture un
+    `docker pull` anonyme par tag et par digest, un smoke test sur `/health`
+    et le contrôle du config digest attendu : une image non signée n'est
+    jamais exécutée.
 
 Paramètres GitHub configurés par le propriétaire du dépôt (vérifiés par
 l'API GitHub le 2026-10-08, non contrôlés par la CI) :
@@ -584,6 +599,7 @@ preuves versionnées dans `evidence/after/` restent inchangés.
 Répartition : Max a écrit le Dockerfile et [`docker-bake.hcl`](docker-bake.hcl)
 (PR #8). JB a adapté les politiques, la CI, la publication et les preuves.
 SBOM, Grype et VEX : § 9.
+La signature, l'attestation de SBOM et l'admission sont décrites au § 10.
 
 ### Build avec Bake
 
@@ -604,7 +620,8 @@ CI_PLATFORM=linux/arm64 TAG=ci-arm64 docker buildx bake app-ci   # une plateform
 | `IMAGE`, `TAG` | nom sans tag, tag sans `v` | `flask-api`, `local` |
 | `BUILD_SECRET_FILE` | **chemin** du jeton, jamais son contenu | `secrets/build_token` |
 | `CI_PLATFORM` | plateforme unique de `app-ci` | `linux/amd64` |
-| `CACHE_REF` | cache registre distinct des tags de release ; vide : aucun échange distant | vide |
+| `CACHE_REF` | cache registre distinct des tags de release, importé à chaque build ; vide : aucun échange distant | vide |
+| `CACHE_EXPORT` | exporte aussi le cache vers `CACHE_REF` (`mode=max`, manifeste d'image, gzip) | `false` |
 
 Un chemin de secret hors du dépôt exige `--allow fs.read=<chemin>` avec
 Buildx récent : la CI l'accorde à ce seul fichier. Les anciennes commandes
@@ -660,16 +677,33 @@ fin de build.
   Seule la couche pip est reconstruite dans les deux derniers cas (images de
   base `CACHED`). Le build à froid est dominé par le pull des images de base ;
   le gain du cache pip croît avec la latence réseau, faible sur ce poste.
-- **Couches** : `CACHE_REF` active l'import et l'export registre en `mode=max`
-  déclarés dans le HCL. La CI ne l'utilise pas : aucune écriture distante,
-  donc aucune PR ou fork ne peut empoisonner un cache de confiance. Preuve :
-  export `type=local,mode=max` puis build sur un builder neuf qui réutilise
-  les couches (étapes `CACHED`).
+- **Couches** : l'import (`CACHE_REF`) et l'export registre (`CACHE_EXPORT`,
+  `mode=max`) sont déclarés dans le HCL ; la CI ne fait que fixer ces
+  variables, et n'active `CACHE_EXPORT` qu'en fin de build, après l'audit
+  local du cache. En CI, une ref par architecture
+  (`ghcr.io/maximilianpw/devsecops-max-jb:buildcache-amd64` / `-arm64`, jamais
+  une ref de release) est **lue** à chaque build (le package est public :
+  lecture anonyme) et **écrite** seulement sur `push` (`main` ou tag).
+  Le workflow appelant passe `cache-write: ${{ github.event_name == 'push' }}`
+  à `tp2-build.yaml`, qui n'ouvre une session GHCR que si cette entrée est
+  vraie. Preuve : export `type=local,mode=max` puis build sur un builder neuf
+  qui réutilise les couches (étapes `CACHED`).
+- **Pourquoi une PR n'écrit jamais le cache** : le workflow réutilisable
+  sépare les jobs `trusted` et `readonly`. Seul `trusted` reçoit
+  `packages: write` et le jeton GHCR, sur un push vers `main` ou un tag et avec
+  `cache-write: true`. Le job `readonly` conserve `contents: read`, ne reçoit
+  aucun jeton d'export et n'ouvre aucune session GHCR. Les sorties des deux
+  chemins gardent la même interface pour les cinq checks requis. Les jobs
+  appelants déclarent le plafond de permissions nécessaire au chemin trusted.
+- **Audit du cache registre** : les couches sont auditées dans l'export local
+  `mode=max` avant l'export distant. L'export registre utilise gzip ; les blobs
+  distants sont ensuite téléchargés, vérifiés par SHA256 et inspectés avec le
+  détecteur exact du jeton. Un manifeste sans couches ou une compression zstd
+  non prise en charge bloque l'audit. L'audit distant reste à exercer sur GHCR.
 - **Limites** : le cache `mode=max` ne transporte pas le contenu des montages
   cache. pip n'est donc pas persistant d'un runner à l'autre, ce qui n'est pas
-  un objectif du TP. Un cache registre partagé en CI demanderait des refs par
-  architecture et `packages: write` sur le seul job concerné, après
-  autorisation.
+  un objectif du TP. Le cache registre est un accélérateur, jamais une preuve :
+  l'image publiée est celle de l'archive testée et vérifiée (ci-dessous).
 
 ### Deux architectures, une identité vérifiée
 
@@ -702,27 +736,40 @@ Sur tag `vX.Y.Z` uniquement, après succès des trois agrégateurs
    contrôle du config digest, de la plateforme et des DiffIDs après `crane pull` ;
 4. index assemblé à partir des **digests** vérifiés, contrôlé (exactement
    amd64 + arm64, sans attestations) ;
-5. tags `X.Y.Z`, puis `X.Y`, puis `X` posés sur ce digest d'index, chacun
+5. signature de l'index candidat et attestation de la SBOM de chaque
+   manifeste, par digest (§ 10), puis job d'admission ;
+6. job de promotion ([`promote_tags.sh`](scripts/ci/promote_tags.sh)) :
+   tags `X.Y.Z`, puis `X.Y`, puis `X` posés sur le digest admis, chacun
    vérifié ;
-6. pull anonyme et smoke test par tag et par digest sur chaque architecture,
+7. pull anonyme et smoke test par tag et par digest sur chaque architecture,
    avec le config digest attendu.
 
-**États partiels et reprise.** Un registre ne permet pas de poser plusieurs
-tags de façon atomique. Un échec avant l'étape 5 ne promeut rien : seules des
-refs `staging-<run>-<tentative>-*` existent, conservées pour diagnostic. Un
-échec pendant l'étape 5 peut laisser `X.Y.Z` publié avec `X.Y` et/ou `X`
-encore sur la release précédente. Le job affiche alors le digest de l'index
-candidat et celui des trois tags. Reprise :
+**Pourquoi pas `bake --push`.** Le sujet demande une « exécution déclarative du
+build multi-plateforme vers ghcr.io ». Le build reste déclaratif (`docker-bake.hcl`,
+une cible par architecture) ; seule la publication diffère. `bake --push`
+reconstruirait au moment de publier : les octets poussés ne seraient plus ceux
+que Compose, Dive et Trivy ont testés (rien ne garantit deux builds identiques),
+et la signature porterait sur une image jamais scannée. Ici, `crane push`
+envoie l'archive vérifiée telle quelle, et chaque digest publié est comparé à
+l'Image ID testé. L'écart avec la lettre du sujet est assumé et justifié par
+cette garantie « ce qui est testé est ce qui est publié ».
 
-- **`X.Y.Z` absent** : relancer le job de release (« Re-run failed jobs »). Il
-  réutilise les mêmes archives validées ; les nouvelles refs de staging sont
-  propres à la tentative.
+**États partiels et reprise.** Un registre ne permet pas de poser plusieurs
+tags de façon atomique. Un échec avant l'étape 6 (publication, signature ou
+admission) ne promeut rien : seules des refs `staging-<run>-<tentative>-*`
+existent, conservées pour diagnostic. Un échec pendant l'étape 6 peut laisser
+`X.Y.Z` publié avec `X.Y` et/ou `X` encore sur la release précédente. Le job
+affiche alors le digest de l'index signé et celui des trois tags. Reprise :
+
+- **`X.Y.Z` absent** : relancer les jobs en échec (« Re-run failed jobs »). La
+  release réutilise les mêmes archives validées ; les nouvelles refs de
+  staging sont propres à la tentative.
 - **`X.Y.Z` présent sur l'index candidat de ce run**, alias manquants ou
   anciens : ne pas relancer le job, qui refuse à raison une version existante.
   Un mainteneur disposant de `packages: write` vérifie que `vX.Y.Z` est
   toujours la release stable la plus récente. Il pose ensuite chaque alias
   manquant sur ce digest (`crane tag ghcr.io/…@<digest> X.Y`) et le vérifie
-  (`crane digest`), puis lance les pulls anonymes de l'étape 6. `X.Y.Z`
+  (`crane digest`), puis lance les pulls anonymes de l'étape 7. `X.Y.Z`
   n'est jamais réécrit.
 - **`X.Y.Z` présent sur un autre digest** : arrêt. Ne rien écraser ;
   analyser l'origine, puis publier une nouvelle version de correctif.
@@ -746,6 +793,8 @@ métadonnées, intégration. Les mesures TP1 de `evidence/after/` sont conservé
 | Dive ≥ 80 % | ✅ 99,74 % | ✅ 99,72 % | ✅ 99,72 % / 99,74 % | — |
 | Trivy, toutes sévérités (API, deps, PostgreSQL) | ✅ 0 | ✅ 0 | ✅ 0 / 0 | — |
 | Index amd64 + arm64 publié, pulls anonymes | registre jetable | — | — | à vérifier (non exécutée) |
+| Signature récursive, attestations SBOM, admission (clé jetable) | registre jetable | — | — | — |
+| Signature et admission keyless (OIDC GitHub) | — | — | — | à vérifier (non exécutée : v1.2.0 pas encore publiée) |
 
 CI : [run 40343481595](https://github.com/maximilianpw/devsecops-max-jb/actions/runs/40343481595)
 (PR #10, commit `d5989da`, 2026-10-26), Buildx 0.38.0, BuildKit 0.33.1 ;
@@ -769,6 +818,7 @@ conteneur ([`scan_variant.sh`](scripts/ci/scan_variant.sh)) :
 
 ```bash
 syft scan docker-archive:dist/image.tar \
+  --source-version "$EXPECTED_IMAGE_ID" \
   -o cyclonedx-json=reports/sbom/sbom.cdx.json \
   -o spdx-json=reports/sbom/sbom.spdx.json
 ```
@@ -872,6 +922,158 @@ réapparaît dans le rapport complet, ce qui impose une nouvelle revue. Revue au
 plus tard le 2026-11-29, ou plus tôt si un correctif paraît ou si l'API
 commence à traiter des archives.
 
+## 10. Vérification publique (évaluateur)
+
+Référence complète de la release, à renseigner après la publication de
+`v1.2.0` (digest de l'index) :
+
+```text
+ghcr.io/maximilianpw/devsecops-max-jb:1.2.0@sha256:<index-digest>
+```
+
+Aucun identifiant n'est nécessaire : le package est public et la
+vérification ne lit que le registre et les journaux publics de Sigstore.
+
+### Commandes
+
+Prérequis : [Cosign](https://github.com/sigstore/cosign) 3.x (la release a été
+construite avec la 3.1.4), `jq`, Docker avec Buildx.
+
+```sh
+REPOSITORY=ghcr.io/maximilianpw/devsecops-max-jb
+TAG=v1.2.0
+ID="https://github.com/maximilianpw/devsecops-max-jb/.github/workflows/ci.yaml@refs/tags/$TAG"
+ISSUER="https://token.actions.githubusercontent.com"
+
+# Digests : index, puis un manifeste par plateforme
+docker buildx imagetools inspect ghcr.io/maximilianpw/devsecops-max-jb:1.2.0
+INDEX=sha256:<index-digest>
+docker buildx imagetools inspect --raw "$REPOSITORY@$INDEX" \
+  | jq -r '.manifests[] | "\(.platform.architecture) \(.digest)"'
+AMD64=sha256:<amd64-digest>
+ARM64=sha256:<arm64-digest>
+
+# Signature de l'index et de chaque manifeste (signature récursive)
+for d in "$INDEX" "$AMD64" "$ARM64"; do
+  cosign verify --certificate-identity "$ID" --certificate-oidc-issuer "$ISSUER" "$REPOSITORY@$d"
+done
+
+# Attestation SBOM CycloneDX de chaque plateforme
+for d in "$AMD64" "$ARM64"; do
+  cosign verify-attestation --type cyclonedx \
+    --certificate-identity "$ID" --certificate-oidc-issuer "$ISSUER" "$REPOSITORY@$d"
+done
+
+# Extraction de la SBOM attestée (sortie de verify-attestation : DSSE, JSON par ligne)
+cosign verify-attestation --type cyclonedx \
+  --certificate-identity "$ID" --certificate-oidc-issuer "$ISSUER" "$REPOSITORY@$AMD64" \
+  | jq -r .payload | base64 -d | jq .predicate > sbom-from-registry.cdx.json
+jq '.components | length' sbom-from-registry.cdx.json
+```
+
+Un échec de `cosign verify` (identité différente, signature absente ou
+altérée) retourne un code non nul. Pour extraire la SBOM, utiliser
+`verify-attestation` et non `cosign download attestation` : cette dernière
+commande ne vérifie rien et renvoie aussi les bundles de signature, pas
+seulement l'attestation CycloneDX.
+
+### Keyless : ce que prouve la signature
+
+- **Pas de clé à garder, pas de `cosign.pub`** : le job de release demande un
+  jeton OIDC à GitHub Actions (`id-token: write`, ce job seulement). **Fulcio**
+  (autorité de certification de Sigstore) émet un certificat valable quelques
+  minutes pour une clé éphémère, détruite après la signature. Le certificat
+  contient l'identité du workflow (`…/.github/workflows/ci.yaml@refs/tags/vX.Y.Z`),
+  l'émetteur OIDC et le commit. **Rekor** (journal de transparence public)
+  enregistre la signature : on peut la vérifier après l'expiration du
+  certificat. Il n'y a donc aucun secret de signature à stocker, à faire
+  tourner ou à voir fuiter dans un dépôt.
+- **Ce que le vérifieur décide** : il fait confiance à la racine Sigstore
+  (distribuée par TUF) et exige une identité précise, d'où `--certificate-identity`
+  et `--certificate-oidc-issuer`. Une signature valide d'une autre identité
+  (autre dépôt, autre workflow, autre tag) est refusée.
+- **Signer depuis `ci.yaml`** : dans un workflow réutilisable, le certificat
+  porterait le chemin de ce workflow (`job_workflow_ref`) et non celui de
+  `ci.yaml`. La signature et l'attestation restent donc dans le job de
+  release de `ci.yaml`, appelées par
+  [`sign_release.sh`](scripts/ci/sign_release.sh).
+- **Pourquoi le digest et non le tag** : un tag est modifiable et peut être
+  déplacé vers une autre image après la signature ; une signature portant sur
+  un tag n'engagerait donc rien. Cosign est toujours appelé avec
+  `dépôt@sha256:…` (index et manifestes), jamais avec un tag. Les tags `1.2.0`,
+  `1.2` et `1` ne sont posés qu'après l'admission, sur le digest admis.
+
+### Ce qui est vérifié, et où
+
+| Étape | Job | Contrôle |
+| --- | --- | --- |
+| Identité de l'artefact SBOM | `release` | API GitHub : ID, nom `sbom-<arch>-<tentative>`, run, commit, non expiré ([`verify_sbom.sh`](scripts/ci/verify_sbom.sh)) |
+| SBOM = image de cette architecture | `release` | CycloneDX valide, `metadata.component` de type `container`, version du composant = config digest et couches citées par Syft ⊆ DiffIDs de l'archive vérifiée ([`sbom_identity.py`](scripts/ci/sbom_identity.py)) |
+| Digests présents | `release` | trois digests `sha256:` distincts, index = exactement amd64 + arm64, **avant** tout appel à Cosign |
+| Signature + attestations | `release` | `cosign sign --recursive` sur l'index, `cosign attest --type cyclonedx` sur chaque manifeste |
+| Admission | `admission` | `cosign verify` (index et manifestes), `cosign verify-attestation`, sujet = manifeste attendu, prédicat = SBOM validée en CI (nombre de composants et empreinte du JSON canonique) |
+| Promotion | `promote` | tags `X.Y.Z`, `X.Y`, `X` posés sur le digest admis, chacun relu ([`promote_tags.sh`](scripts/ci/promote_tags.sh)) |
+
+L'admission ne télécharge aucun artefact (ce qui exigerait un jeton) : le
+nombre de composants et l'empreinte SBOM attendus sont des outputs du job
+`release` du même run, calculés après validation. La SBOM attestée est donc
+comparée octet pour octet (JSON canonique) à celle validée en CI.
+
+**Contrat obligatoire avec le producteur SBOM.** Syft doit générer la SBOM
+avec `--source-version <image-id>`, où `<image-id>` est le config digest de
+l'archive vérifiée. `metadata.component.version` doit correspondre exactement
+à cet identifiant. Une SBOM sans cette liaison est rejetée avant publication,
+même si ses couches de dépendances appartiennent à l'image. La sortie brute de
+Syft utilise un autre digest ; les fixtures conservent ce cas de rejet.
+Le scan utilise désormais cette convention dans `scan_variant.sh`.
+
+### Cosign 3.1.4 et format des bundles
+
+Cosign est installé par [`install_tools.sh`](scripts/ci/install_tools.sh)
+(binaire officiel `cosign-linux-amd64` de la release `v3.1.4`, SHA256
+`424e2c97…bfa`, identique à `cosign_checksums.txt` de la release et vérifié
+avec `cosign verify-blob` sur le bundle de la release). Cosign 3 écrit les
+signatures et attestations au **format bundle Sigstore** (type de média
+`application/vnd.dev.sigstore.bundle.v0.3+json`), attachées au manifeste signé
+comme artefacts OCI (« referrers »). Quand le registre n'expose pas l'API
+Referrers, Cosign utilise le schéma de tags `sha256-<digest>` : ces tags
+apparaissent dans la liste des tags du package. Constaté localement avec la
+3.1.4 sur un registre `registry:2` ; le comportement exact de GHCR sera
+constaté au premier run de release. `cosign sign --recursive` signe l'index
+et chacun de ses manifestes ; `verify` et `verify-attestation` retrouvent les
+bundles par digest. Les signatures sont aussi des bundles DSSE : une
+plateforme sans attestation CycloneDX fait échouer `verify-attestation --type
+cyclonedx` (« none of the attestations matched the predicate type »).
+
+### Tests et limites de la preuve
+
+- Tests sans réseau : `tests/test_ci_failure_paths.py` (mauvaise identité,
+  attestation absente, SBOM d'une autre architecture, digest absent sans
+  appel à Cosign) et `tests/test_sign_attest.py` (vraies SBOM Syft).
+- Test de bout en bout en **mode clé jetable** contre un registre local
+  (`registry:2`) : publication par `publish_index.sh`, signature récursive,
+  attestations, admission, échecs attendus (autre clé, SBOM attendue
+  permutée), puis promotion des tags.
+
+  ```sh
+  docker run -d --name tp2-reg -p 127.0.0.1:5001:5000 registry:2
+  TP2_TEST_REGISTRY=localhost:5001 pytest tests/test_sign_attest.py
+  ```
+
+  Requiert `docker`, `cosign`, `crane` et `syft` ; ignoré sinon.
+- **Non exécuté tant que `v1.2.0` n'est pas publiée** : le mode keyless
+  (Fulcio, Rekor, SAN du certificat) et le comportement de GHCR. Ils ne se
+  testent que dans un vrai run GitHub Actions ; la section « Preuves » sera
+  complétée avec la sortie réelle des commandes ci-dessus, lancées depuis une
+  machine sans connexion GHCR.
+- **Échec de la signature ou de l'admission** (Fulcio, Rekor ou OIDC
+  indisponible) : aucun tag de release n'a été posé, seules des refs
+  `staging-*` existent. Un « Re-run failed jobs » republie un nouvel index
+  candidat et le signe ; `X.Y.Z` n'existe toujours pas, la release n'est donc
+  pas bloquée.
+- Le checkout du job `admission` (`permissions: {}`) suppose un dépôt public,
+  ce qui est le cas ; sur un dépôt privé il échouerait.
+
 ## Reproduction locale
 
 Prérequis : Docker avec Compose v2, Buildx (Bake, builder `docker-container`)
@@ -901,7 +1103,9 @@ dive --ci --ci-config .dive-ci flask-api:local
 docker save -o image.tar flask-api:local
 trivy image --input image.tar --scanners vuln \
   --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1
-syft scan docker-archive:image.tar -o cyclonedx-json=sbom.cdx.json -o spdx-json=sbom.spdx.json
+image_id=$(python3 scripts/ci/image_archive.py describe image.tar | python3 -c 'import json,sys; print(json.load(sys.stdin)["image_id"])')
+syft scan docker-archive:image.tar --source-version "$image_id" \
+  -o cyclonedx-json=sbom.cdx.json -o spdx-json=sbom.spdx.json
 scripts/ci/sbom_stats.sh sbom.cdx.json sbom.spdx.json
 grype sbom:sbom.cdx.json --config .grype.yaml
 
