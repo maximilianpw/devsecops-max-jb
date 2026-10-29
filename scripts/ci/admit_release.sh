@@ -2,7 +2,7 @@
 # Porte d'admission : lectures publiques uniquement, sans identifiant ni artefact.
 # Les empreintes SBOM attendues viennent des outputs du job release (même run).
 set -euo pipefail
-: "${REPOSITORY:?}" "${VERSION:?}" "${MINOR:?}" "${MAJOR:?}"
+: "${REPOSITORY:?}"
 : "${INDEX_DIGEST:?}" "${AMD64_DIGEST:?}" "${ARM64_DIGEST:?}"
 : "${AMD64_SBOM_COMPONENTS:?}" "${AMD64_SBOM_SHA256:?}"
 : "${ARM64_SBOM_COMPONENTS:?}" "${ARM64_SBOM_SHA256:?}"
@@ -35,11 +35,7 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 export DOCKER_CONFIG="$work/docker"   # lecture anonyme : aucun identifiant du runner
 
-# Les tags publiés pointent vers l'index signé, qui contient les deux manifestes attestés.
-for tag in "$VERSION" "$MINOR" "$MAJOR"; do
-  [ "$(crane digest "$REPOSITORY:$tag")" = "$INDEX_DIGEST" ] \
-    || { echo "$REPOSITORY:$tag ne pointe pas vers $INDEX_DIGEST" >&2; exit 1; }
-done
+# Avant toute pose de tag : l'index candidat contient les deux manifestes attestés.
 crane manifest "$REPOSITORY@$INDEX_DIGEST" > "$work/index.json"
 python3 "$ci/check_index.py" "$work/index.json" "$AMD64_DIGEST" "$ARM64_DIGEST"
 

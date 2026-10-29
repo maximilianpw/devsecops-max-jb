@@ -297,12 +297,9 @@ jobs:
         with:
           persist-credentials: false
       - run: scripts/ci/install_tools.sh crane cosign
-      - name: Verify signature, attestations and tags without credentials
+      - name: Verify signature and attestations without credentials
         env:
           REPOSITORY: ${{ needs.release.outputs.repository }}
-          VERSION: ${{ needs.release.outputs.version }}
-          MINOR: ${{ needs.release.outputs.minor }}
-          MAJOR: ${{ needs.release.outputs.major }}
           INDEX_DIGEST: ${{ needs.release.outputs.digest }}
           AMD64_DIGEST: ${{ needs.release.outputs.amd64-digest }}
           ARM64_DIGEST: ${{ needs.release.outputs.arm64-digest }}
@@ -311,9 +308,39 @@ jobs:
           ARM64_SBOM_COMPONENTS: ${{ needs.release.outputs.arm64-sbom-components }}
           ARM64_SBOM_SHA256: ${{ needs.release.outputs.arm64-sbom-sha256 }}
         run: scripts/ci/admit_release.sh
+  promote:
+    name: Promote admitted index to release tags
+    needs: [release, admission]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    concurrency:
+      group: ghcr-release
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - run: scripts/ci/install_tools.sh crane
+      - name: Authenticate to GHCR
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$GITHUB_TOKEN" | crane auth login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      - name: Tag the signed index
+        env:
+          REPOSITORY: ${{ needs.release.outputs.repository }}
+          VERSION: ${{ needs.release.outputs.version }}
+          MINOR: ${{ needs.release.outputs.minor }}
+          MAJOR: ${{ needs.release.outputs.major }}
+          INDEX_DIGEST: ${{ needs.release.outputs.digest }}
+        run: scripts/ci/promote_tags.sh
+      - name: Log out
+        if: ${{ always() }}
+        run: docker logout ghcr.io
   verify-publication:
     name: Anonymous pull and native smoke test
-    needs: [release, admission, build-amd64, build-arm64]
+    needs: [release, promote, build-amd64, build-arm64]
     strategy:
       fail-fast: false
       matrix:

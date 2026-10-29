@@ -286,6 +286,12 @@ if args[0] == 'digest':
     print(tags[args[1].split(':')[-1]])
 elif args[0] == 'manifest':
     print((registry / 'index.json').read_text())
+elif args[0] == 'tag':
+    tags = json.loads((registry / 'tags.json').read_text())
+    digest = args[1].split('@')[1]
+    drifted = args[2] == os.environ.get('DRIFT')
+    tags[args[2]] = 'sha256:' + 'e' * 64 if drifted else digest
+    (registry / 'tags.json').write_text(json.dumps(tags))
 """
 
 COSIGN = r"""import json, os, sys
@@ -484,12 +490,31 @@ def test_admission_rejects_an_sbom_from_another_architecture(release):
     assert 'prédicat attesté' in result.stderr.decode()
 
 
-def test_admission_fails_when_a_tag_no_longer_points_to_the_signed_index(release):
+def test_admission_never_reads_release_tags(release):
     root, env = release
-    (root / 'registry/tags.json').write_text(json.dumps(
-        {'1.2.0': INDEX, '1.2': AMD64, '1': INDEX}))
-    assert execute(root, env, 'admit_release.sh').returncode != 0
-    assert cosign_calls(root) == []
+    (root / 'registry/tags.json').write_text('{}')
+    assert execute(root, env, 'admit_release.sh').returncode == 0
+    assert not [c for c in calls(root) if c[:2] == ['crane', 'digest']]
+
+
+def test_promotion_tags_the_admitted_index(release):
+    root, env = release
+    (root / 'registry/tags.json').write_text('{}')
+    result = execute(root, env, 'promote_tags.sh')
+    assert result.returncode == 0, result.stderr
+    tags = json.loads((root / 'registry/tags.json').read_text())
+    assert tags == {'1.2.0': INDEX, '1.2': INDEX, '1': INDEX}
+
+
+def test_promotion_reports_a_tag_that_does_not_land_on_the_index(release):
+    root, env = release
+    (root / 'registry/tags.json').write_text('{}')
+    env['DRIFT'] = '1.2'
+    result = execute(root, env, 'promote_tags.sh')
+    assert result.returncode != 0
+    assert b'Promotion interrompue' in result.stderr
+    tags = json.loads((root / 'registry/tags.json').read_text())
+    assert '1' not in tags
 
 
 @pytest.mark.parametrize('missing', [
@@ -715,6 +740,9 @@ if args[:2] == ['buildx', 'build']:
         print('secret package_token: not found')
         sys.exit(1)
 elif args[:2] == ['buildx', 'bake']:
+    with open(os.environ['CALLS'], 'a') as stream:
+        stream.write(json.dumps(['bake-env', os.environ.get('CACHE_REF', ''),
+                                 os.environ.get('CACHE_EXPORT', '')]) + '\n')
     if any('cache-to=type=local' in arg for arg in args):
         blobs = Path('dist/layer-cache/blobs/sha256')
         blobs.mkdir(parents=True, exist_ok=True)
@@ -728,8 +756,9 @@ elif args[0] == 'save':
     assert result.returncode == 0, result.stderr
     recorded = calls(root)
     logins = [call for call in recorded if call[:1] == ['login']]
-    exports = [call for call in recorded
-               if any('cache-to=type=registry' in arg for arg in call)]
+    bakes = [call for call in recorded if call[0] == 'bake-env']
+    assert all(call[1].startswith('ghcr.io/') for call in bakes)
+    exports = [call for call in bakes if call[2] == 'true']
     assert len(logins) == int(allowed)
     assert len(exports) == int(allowed)
     assert env['GITHUB_TOKEN'].encode() not in result.stdout + result.stderr

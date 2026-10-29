@@ -182,7 +182,7 @@ def test_permissions_are_confined_to_the_jobs_that_need_them():
     blocks = jobs()
     assert [k for k, v in blocks.items() if 'id-token: write' in v] == ['release']
     assert [k for k, v in blocks.items() if 'packages: write' in v] == [
-        'build-amd64', 'build-arm64', 'release']
+        'build-amd64', 'build-arm64', 'release', 'promote']
     assert 'permissions: {}' in blocks['admission']
     assert 'permissions: {}' in blocks['verify-publication']
     # Un workflow réutilisable changerait le SAN : on signe depuis ci.yaml.
@@ -205,10 +205,11 @@ def test_admission_is_blocking_and_gates_the_publication_check():
     for forbidden in ('continue-on-error', '|| true', 'download-artifact',
                       'secrets.', 'GITHUB_TOKEN', 'packages:'):
         assert forbidden not in admission
-    assert re.search(r'needs: \[release, admission,', blocks['verify-publication'])
+    assert 'needs: [release, admission]\n' in blocks['promote']
+    assert re.search(r'needs: \[release, promote,', blocks['verify-publication'])
 
 
-def test_release_validates_sbom_before_publishing_and_signs_after_tags():
+def test_release_signs_before_any_release_tag():
     release = jobs()['release']
     order = [release.index(marker) for marker in (
         'verify_sbom.sh amd64', 'verify_sbom.sh arm64',
@@ -216,6 +217,9 @@ def test_release_validates_sbom_before_publishing_and_signs_after_tags():
     assert order == sorted(order)
     assert 'scan-amd64.outputs.sbom-artifact-id' in release
     assert 'steps.push.outputs.amd64_digest' in release
+    assert 'promote_tags.sh' not in release
+    publish = (ROOT / 'scripts/ci/publish_index.sh').read_text()
+    assert 'crane tag' not in publish
 
 
 def test_required_checks_keep_their_names():
@@ -322,10 +326,10 @@ def test_local_registry_key_mode(tmp_path):
     wrong_sbom = dict(env, AMD64_SBOM_SHA256=env['ARM64_SBOM_SHA256'])
     for broken in (wrong_key, wrong_sbom):
         assert run(admit, tmp_path, broken, check=False).returncode != 0
-    # Un tag qui dérive vers un autre digest que l'index signé bloque l'admission.
-    run(['crane', 'tag', f'{env["REPOSITORY"]}@{env["AMD64_DIGEST"]}', '1'],
-        tmp_path, env)
-    assert run(admit, tmp_path, env, check=False).returncode != 0
+    run(['scripts/ci/promote_tags.sh'], tmp_path, env)
+    for tag in ('1.2.3', '1.2', '1'):
+        digest = run(['crane', 'digest', f'{repository}:{tag}'], tmp_path, env)
+        assert digest.stdout.strip() == env['INDEX_DIGEST']
 
 
 def test_sbom_rejects_another_image_sharing_dependency_layers():
