@@ -363,7 +363,8 @@ Un job sauté, annulé ou absent les fait échouer.
   publier.
 - **Permissions** : `permissions: {}` au niveau du workflow ;
   `contents: read` par job. `packages: write` : job de release et les deux
-  jobs de build (cache registre, § 8) ; `id-token: write` (OIDC Sigstore) et
+  jobs de build (plafond transmis aux workflows réutilisables ; seul le job
+  `trusted` reçoit cette permission, § 8) ; `id-token: write` (OIDC Sigstore) et
   `actions: read` (identité des artefacts SBOM) : job de release seulement ;
   `permissions: {}` pour `admission` et la vérification publique.
   `persist-credentials: false` sur chaque checkout.
@@ -681,16 +682,18 @@ fin de build.
   à `tp2-build.yaml`, qui n'ouvre une session GHCR que si cette entrée est
   vraie. Preuve : export `type=local,mode=max` puis build sur un builder neuf
   qui réutilise les couches (étapes `CACHED`).
-- **Pourquoi une PR n'écrit jamais le cache** : `permissions` n'accepte pas
-  d'expression, donc `packages: write` est déclaré sur les deux jobs de build
-  pour tous les événements. Sur une PR, `cache-write` vaut `false` : aucune
-  connexion à GHCR, aucun `cache-to`. Une PR de fork n'a de toute façon qu'un
-  jeton en lecture seule. Pour une PR d'une branche du dépôt, la garantie
-  repose sur ce câblage du workflow, pas sur l'absence de jeton : celui qui
-  peut ouvrir une telle PR peut aussi modifier le workflow, ce qui exige déjà
-  un accès en écriture au dépôt. Séparer les jobs de build « de confiance »
-  des jobs de PR retirerait ce jeton, au prix d'une duplication des jobs et
-  des dépendances des cinq checks requis ; ce choix n'a pas été fait.
+- **Pourquoi une PR n'écrit jamais le cache** : le workflow réutilisable
+  sépare les jobs `trusted` et `readonly`. Seul `trusted` reçoit
+  `packages: write` et le jeton GHCR, sur un push vers `main` ou un tag et avec
+  `cache-write: true`. Le job `readonly` conserve `contents: read`, ne reçoit
+  aucun jeton d'export et n'ouvre aucune session GHCR. Les sorties des deux
+  chemins gardent la même interface pour les cinq checks requis. Les jobs
+  appelants déclarent le plafond de permissions nécessaire au chemin trusted.
+- **Audit du cache registre** : les couches sont auditées dans l'export local
+  `mode=max` avant l'export distant. L'export registre utilise gzip ; les blobs
+  distants sont ensuite téléchargés, vérifiés par SHA256 et inspectés avec le
+  détecteur exact du jeton. Un manifeste sans couches ou une compression zstd
+  non prise en charge bloque l'audit. L'audit distant reste à exercer sur GHCR.
 - **Limites** : le cache `mode=max` ne transporte pas le contenu des montages
   cache. pip n'est donc pas persistant d'un runner à l'autre, ce qui n'est pas
   un objectif du TP. Le cache registre est un accélérateur, jamais une preuve :
