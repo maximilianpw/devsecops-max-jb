@@ -1,0 +1,12 @@
+Name:      ghcr.io/maximilianpw/devsecops-max-jb:1.2.0
+MediaType: application/vnd.docker.distribution.manifest.list.v2+json
+Digest:    sha256:84a7a1a1a2e1379e5dd5095f5c2b9d26f76230cd3d567ebfd42c0a37d36f4b94
+           
+Manifests: 
+  Name:      ghcr.io/maximilianpw/devsecops-max-jb:1.2.0@sha256:0296806c2b6448717924b9afcf275e01756119ce6a8b97c8e9913523b713c51e
+  MediaType: application/vnd.docker.distribution.manifest.v2+json
+  Platform:  linux/amd64
+             
+  Name:      ghcr.io/maximilianpw/devsecops-max-jb:1.2.0@sha256:ab05b6f7094d6fcd5ebc523672b1493d18ae95aaa64648386c146e4f402e1313
+  MediaType: application/vnd.docker.distribution.manifest.v2+json
+  Platform:  linux/arm64

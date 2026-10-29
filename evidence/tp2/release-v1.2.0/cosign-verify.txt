@@ -1,0 +1,50 @@
+# 2026-10-29, macOS arm64, DOCKER_CONFIG vide (aucun identifiant GHCR), identité ci.yaml@refs/tags/v1.2.0, émetteur https://token.actions.githubusercontent.com
+GitVersion:    v3.1.3
+== verify sha256:84a7a1a1a2e1379e5dd5095f5c2b9d26f76230cd3d567ebfd42c0a37d36f4b94
+The following checks were performed on each of these signatures:
+  - The cosign claims were validated
+  - Existence of the claims in the transparency log was verified offline
+  - The code-signing certificate was verified using trusted certificate authority certificates
+== verify sha256:0296806c2b6448717924b9afcf275e01756119ce6a8b97c8e9913523b713c51e
+The following checks were performed on each of these signatures:
+  - The cosign claims were validated
+  - Existence of the claims in the transparency log was verified offline
+  - The code-signing certificate was verified using trusted certificate authority certificates
+== verify sha256:ab05b6f7094d6fcd5ebc523672b1493d18ae95aaa64648386c146e4f402e1313
+The following checks were performed on each of these signatures:
+  - The cosign claims were validated
+  - Existence of the claims in the transparency log was verified offline
+  - The code-signing certificate was verified using trusted certificate authority certificates
+== verify-attestation sha256:0296806c2b6448717924b9afcf275e01756119ce6a8b97c8e9913523b713c51e
+The following checks were performed on each of these signatures:
+  - The cosign claims were validated
+  - Existence of the claims in the transparency log was verified offline
+  - The code-signing certificate was verified using trusted certificate authority certificates
+  "predicateType": "https://cyclonedx.org/bom",
+  "subject": [
+    {
+      "name": "ghcr.io/maximilianpw/devsecops-max-jb",
+      "digest": {
+        "sha256": "0296806c2b6448717924b9afcf275e01756119ce6a8b97c8e9913523b713c51e"
+      }
+    }
+  ],
+  "components": 1906
+== verify-attestation sha256:ab05b6f7094d6fcd5ebc523672b1493d18ae95aaa64648386c146e4f402e1313
+The following checks were performed on each of these signatures:
+  - The cosign claims were validated
+  - Existence of the claims in the transparency log was verified offline
+  - The code-signing certificate was verified using trusted certificate authority certificates
+  "predicateType": "https://cyclonedx.org/bom",
+  "subject": [
+    {
+      "name": "ghcr.io/maximilianpw/devsecops-max-jb",
+      "digest": {
+        "sha256": "ab05b6f7094d6fcd5ebc523672b1493d18ae95aaa64648386c146e4f402e1313"
+      }
+    }
+  ],
+  "components": 1906
+== cosign verify, identité attendue v1.1.0 (doit échouer)
+rc=1
+error during command execution: no matching attestations: failed to verify certificate identity: no matching CertificateIdentity found, last error: expected SAN value "https://github.com/maximilianpw/devsecops-max-jb/.github/workflows/ci.yaml@refs/tags/v1.1.0", got "https://github.com/maximilianpw/devsecops-max-jb/.github/workflows/ci.yaml@refs/tags/v1.2.0"
