@@ -7,7 +7,9 @@ set -euo pipefail
 case "$ARCH" in amd64|arm64) ;; *) exit 1 ;; esac
 export IMAGE=flask-api TAG="ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${ARCH}"
 : "${GITHUB_REPOSITORY:=maximilianpw/devsecops-max-jb}"
-CACHE_REF="ghcr.io/${GITHUB_REPOSITORY}:buildcache-${ARCH}"
+unset CACHE_REF
+cache_repository=$(printf '%s' "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')
+CACHE_REF="ghcr.io/${cache_repository}:buildcache-${ARCH}"
 # Ne pas exporter CACHE_REF : docker-bake.hcl n'active alors aucun cache registre
 # implicite ; l'import/export est piloté explicitement ci-dessous.
 export CI_PLATFORM="linux/$ARCH"
@@ -74,6 +76,11 @@ grep -q 'Build secret package_token must not be empty' "$logs/empty.log"
 docker buildx bake --allow "fs.read=$BUILD_SECRET_FILE" -f docker-bake.hcl app-ci \
   --set "app-ci.cache-from=type=registry,ref=${CACHE_REF}" \
   --progress=plain > "$logs/build.log" 2>&1
+# Un cache registre chaud peut éviter entièrement pip et laisser son montage
+# local vide. Réchauffer explicitement ce montage avant la preuve de réemploi.
+docker buildx bake --allow "fs.read=$BUILD_SECRET_FILE" -f docker-bake.hcl app-ci \
+  --set app-ci.target=builder --set "app-ci.tags=flask-api:warm-$TAG" \
+  --no-cache --progress=plain > "$logs/pip-warm.log" 2>&1
 # Cache pip : --no-cache ignorerait aussi le montage cache. On invalide donc
 # seulement la couche pip, sur le même builder, via une copie du contexte dont
 # requirements.txt diffère d'un commentaire. L'image publiée reste celle du bake.
@@ -121,7 +128,7 @@ if [[ "$registry_cache_write" == "true" ]]; then
   fi
   printf '%s' "$GITHUB_TOKEN" | docker login ghcr.io --username "${GITHUB_ACTOR:-}" --password-stdin > "$logs/registry-login.log" 2>&1
   docker buildx bake --allow "fs.read=$BUILD_SECRET_FILE" -f docker-bake.hcl app-ci \
-    --set "app-ci.cache-to=type=registry,ref=${CACHE_REF},mode=max" \
+    --set "app-ci.cache-to=type=registry,ref=${CACHE_REF},mode=max,compression=gzip,force-compression=true" \
     --set "app-ci.cache-from=type=registry,ref=${CACHE_REF}" \
     --progress=plain > "$logs/cache-registry-export.log" 2>&1
   python3 scripts/ci/audit_secret.py "$BUILD_SECRET_FILE" "$logs/cache-registry-export.log"

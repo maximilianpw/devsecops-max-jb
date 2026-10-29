@@ -4,18 +4,13 @@
 import argparse
 import hashlib
 import json
-import os
+import re
 import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-
-try:
-    import zstandard
-except ImportError:  # pragma: no cover - dépendance optionnelle
-    zstandard = None
 
 from audit_secret import contains as secret_contains  # noqa: E402
 
@@ -74,32 +69,23 @@ def http_get(url, token=None, headers=None):
 
 
 def manifest_digests(manifest):
+    if not isinstance(manifest.get("config"), dict) or not manifest.get("layers"):
+        raise ValueError("cache OCI sans config ou couches")
+    descriptors = [manifest["config"], *manifest["layers"]]
     digests = set()
-    if isinstance(manifest.get("config"), dict):
-        digest = manifest["config"].get("digest")
-        if digest:
-            digests.add(digest)
-    for layer in manifest.get("layers", []):
-        if isinstance(layer, dict) and layer.get("digest"):
-            digests.add(layer["digest"])
-    for layer in manifest.get("fsLayers", []):
-        if isinstance(layer, dict) and layer.get("blobSum"):
-            digests.add(layer["blobSum"])
-    if isinstance(manifest.get("layers"), list):
-        pass
+    for descriptor in descriptors:
+        digest = descriptor.get("digest", "")
+        if not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+            raise ValueError("digest SHA256 de cache invalide")
+        digests.add(digest)
     return digests
 
 
 def validate_digest(data, digest):
-    algorithm, expected = digest.split(":", 1)
-    if algorithm == "sha256":
-        actual = hashlib.sha256(data).hexdigest()
-        if actual != expected:
-            raise ValueError(f"digest invalide: {digest}")
-    elif algorithm == "sha512":
-        actual = hashlib.sha512(data).hexdigest()
-        if actual != expected:
-            raise ValueError(f"digest invalide: {digest}")
+    if not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+        raise ValueError("digest SHA256 de cache invalide")
+    if "sha256:" + hashlib.sha256(data).hexdigest() != digest:
+        raise ValueError("digest de cache divergent")
 
 
 def fetch_manifest(registry, repository, reference, token):
@@ -128,12 +114,16 @@ def audit(ref, secret, token=None):
     if token is None:
         token = registry_token(registry, repository)
     manifest, manifest_bytes = fetch_manifest(registry, repository, reference, token)
+    if reference.startswith("sha256:"):
+        validate_digest(manifest_bytes, reference)
     if secret_contains(manifest_bytes, secret):
         raise RuntimeError("jeton trouvé dans le manifeste du cache registre")
     digests = manifest_digests(manifest)
     leaked = []
     for digest in sorted(digests):
         blob = fetch_blob(registry, repository, digest, token)
+        if blob.startswith(b"\x28\xb5\x2f\xfd"):
+            raise ValueError("cache zstd non auditable ; exporter en gzip")
         if secret_contains(blob, secret):
             leaked.append(digest)
     if leaked:
@@ -148,57 +138,20 @@ def audit(ref, secret, token=None):
     }
 
 
-def _resolve_args(args):
-    secret_file = args.secret_file or args.secret_file_positional
-    if not secret_file and args.secret_file_option:
-        secret_file = args.secret_file_option
-    ref = args.ref or args.ref_positional
-    if not ref and args.ref_option:
-        ref = args.ref_option
-    if not secret_file:
-        secret_file = os.environ.get("BUILD_SECRET_FILE")
-    if not ref:
-        ref = os.environ.get("REGISTRY_CACHE_REF") or os.environ.get("CACHE_REF")
-    return secret_file, ref
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("secret_file_positional", nargs="?", help="jeton")
-    parser.add_argument("ref_positional", nargs="?", help="cache")
-    parser.add_argument("--secret-file", dest="secret_file_option", help="jeton")
-    parser.add_argument("--secret", dest="secret_file_option", help="jeton")
-    parser.add_argument("--token-file", dest="secret_file_option", help="jeton")
-    parser.add_argument("--ref", dest="ref_option", help="cache")
-    parser.add_argument("--reference", dest="ref_option", help="cache")
-    parser.add_argument("--cache-ref", dest="ref_option", help="cache")
-    parser.add_argument("--registry-cache-ref", dest="ref_option", help="cache")
+    parser.add_argument("--secret-file", required=True)
+    parser.add_argument("--ref", required=True)
     args = parser.parse_args()
-
-    secret_file, ref = _resolve_args(args)
-    if not secret_file:
-        raise SystemExit("fichier du jeton manquant")
-    if not ref:
-        raise SystemExit("référence du cache manquante")
-
-    token = Path(secret_file).read_bytes().strip()
+    token = Path(args.secret_file).read_bytes().strip()
     if not token:
         raise SystemExit("jeton de contrôle vide")
     try:
-        result = audit(ref, token)
-    except Exception as error:  # noqa: BLE001 - CLI doit échouer proprement
-        raise SystemExit(f"audit du cache registre échoué: {error}") from error
-    print(
-        "Cache registre audité: "
-        f"{result['blob_count']} blob(s), aucun jeton détecté."
-    )
-
-
-# Alias pour les tests et les intégrations futures.
-audit_registry_cache = audit
-audit_cache = audit
-check = audit
-fetch_blobs = None
+        result = audit(args.ref, token)
+    except Exception:
+        # Ne jamais afficher une réponse distante susceptible de contenir le jeton.
+        raise SystemExit("audit du cache registre échoué") from None
+    print(f"Cache registre audité: {result['blob_count']} blobs, sans jeton.")
 
 
 if __name__ == "__main__":

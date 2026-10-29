@@ -102,3 +102,41 @@ def test_registry_cache_audit_rejects_bad_digest(monkeypatch):
     monkeypatch.setattr("urllib.request.urlopen", patch)
     with pytest.raises(ValueError):
         audit.audit("ghcr.io/example/repo:buildcache-amd64", SECRET)
+
+
+def test_registry_cache_audit_rejects_empty_manifest(monkeypatch):
+    monkeypatch.setattr(
+        audit, 'fetch_manifest', lambda *args: ({'manifests': []}, b'{}'))
+    with pytest.raises(ValueError, match='sans config'):
+        audit.audit('ghcr.io/example/repo:buildcache-amd64', SECRET, 'token')
+
+
+def test_registry_cache_rejects_unknown_digest_algorithm():
+    with pytest.raises(ValueError, match='SHA256'):
+        audit.validate_digest(b'clean', 'unknown:unverified')
+
+
+def test_registry_cache_cli_reaches_audit(tmp_path, monkeypatch, capsys):
+    secret = tmp_path / 'token'
+    secret.write_bytes(SECRET)
+    monkeypatch.setattr('sys.argv', [
+        'audit_registry_cache.py', '--secret-file', str(secret),
+        '--ref', 'ghcr.io/example/repo:buildcache-amd64'])
+    monkeypatch.setattr(audit, 'audit', lambda ref, token: {'blob_count': 2})
+    audit.main()
+    assert '2 blobs' in capsys.readouterr().out
+
+
+@pytest.mark.parametrize('compression', ['gzip', 'zstd'])
+def test_registry_cache_handles_compressed_leak(monkeypatch, compression):
+    import gzip
+    manifest, blobs = make_clean()
+    blob = gzip.compress(SECRET) if compression == 'gzip' else (
+        b'\x28\xb5\x2f\xfd' + b'opaque compressed bytes')
+    digest = 'sha256:' + hashlib.sha256(blob).hexdigest()
+    manifest['layers'] = [{'digest': digest}]
+    blobs[digest] = blob
+    monkeypatch.setattr('urllib.request.urlopen', urlopen_factory(
+        json.dumps(manifest).encode(), blobs))
+    with pytest.raises((ValueError, RuntimeError)):
+        audit.audit('ghcr.io/example/repo:buildcache-amd64', SECRET)
