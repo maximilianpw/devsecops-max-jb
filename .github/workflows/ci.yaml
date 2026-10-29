@@ -88,18 +88,22 @@ jobs:
     needs: [python-quality, dockerfile-pinning]
     permissions:
       contents: read
+      packages: write  # écriture du cache : seulement si cache-write, jamais sur PR
     uses: ./.github/workflows/tp2-build.yaml
     with:
       arch: amd64
       runner: ubuntu-24.04
+      cache-write: ${{ github.event_name == 'push' }}
   build-arm64:
     needs: [python-quality, dockerfile-pinning]
     permissions:
       contents: read
+      packages: write  # écriture du cache : seulement si cache-write, jamais sur PR
     uses: ./.github/workflows/tp2-build.yaml
     with:
       arch: arm64
       runner: ubuntu-24.04-arm
+      cache-write: ${{ github.event_name == 'push' }}
   scan-amd64:
     needs: build-amd64
     permissions:
@@ -156,11 +160,13 @@ jobs:
   release:
     name: Publish validated multi-platform index
     if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
-    needs: [python-quality, dockerfile-pinning, build, trivy, integration, build-amd64, build-arm64]
+    needs: [python-quality, dockerfile-pinning, build, trivy, integration, build-amd64, build-arm64, scan-amd64, scan-arm64]
     runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
+      id-token: write  # OIDC keyless pour Cosign ; ce job seulement
+      actions: read    # identité des artefacts SBOM (API artifacts)
     concurrency:
       group: ghcr-release
       cancel-in-progress: false
@@ -170,6 +176,12 @@ jobs:
       minor: ${{ steps.version.outputs.minor }}
       major: ${{ steps.version.outputs.major }}
       digest: ${{ steps.push.outputs.digest }}
+      amd64-digest: ${{ steps.push.outputs.amd64_digest }}
+      arm64-digest: ${{ steps.push.outputs.arm64_digest }}
+      amd64-sbom-components: ${{ steps.sbom_amd64.outputs.components }}
+      amd64-sbom-sha256: ${{ steps.sbom_amd64.outputs.sha256 }}
+      arm64-sbom-components: ${{ steps.sbom_arm64.outputs.components }}
+      arm64-sbom-sha256: ${{ steps.sbom_arm64.outputs.sha256 }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -215,7 +227,40 @@ jobs:
           EXPECTED_RUN_ATTEMPT: ${{ needs.build-arm64.outputs.run-attempt }}
           EXPECTED_PLATFORM: linux/arm64
         run: python3 scripts/ci/image_archive.py verify dist/arm64
-      - run: scripts/ci/install_tools.sh crane
+      # Contrat avec la PR SBOM/VEX : `sbom-artifact-id` en sortie de chaque scan.
+      # Sans ID, download-artifact téléchargerait tous les artefacts du run.
+      - name: Require SBOM artifact IDs from the scan jobs
+        env:
+          AMD64_SBOM_ARTIFACT_ID: ${{ needs.scan-amd64.outputs.sbom-artifact-id }}
+          ARM64_SBOM_ARTIFACT_ID: ${{ needs.scan-arm64.outputs.sbom-artifact-id }}
+        run: |
+          [[ "$AMD64_SBOM_ARTIFACT_ID" =~ ^[1-9][0-9]*$ && "$ARM64_SBOM_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]] \
+            || { echo 'output sbom-artifact-id absent des jobs de scan' >&2; exit 1; }
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          artifact-ids: ${{ needs.scan-amd64.outputs.sbom-artifact-id }}
+          path: dist/sbom/amd64
+          merge-multiple: true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          artifact-ids: ${{ needs.scan-arm64.outputs.sbom-artifact-id }}
+          path: dist/sbom/arm64
+          merge-multiple: true
+      - name: Verify amd64 SBOM identity
+        id: sbom_amd64
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SBOM_ARTIFACT_ID: ${{ needs.scan-amd64.outputs.sbom-artifact-id }}
+          EXPECTED_IMAGE_ID: ${{ needs.build-amd64.outputs.image-id }}
+        run: scripts/ci/verify_sbom.sh amd64
+      - name: Verify arm64 SBOM identity
+        id: sbom_arm64
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SBOM_ARTIFACT_ID: ${{ needs.scan-arm64.outputs.sbom-artifact-id }}
+          EXPECTED_IMAGE_ID: ${{ needs.build-arm64.outputs.image-id }}
+        run: scripts/ci/verify_sbom.sh arm64
+      - run: scripts/ci/install_tools.sh crane cosign
       - name: Authenticate to GHCR
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -230,12 +275,45 @@ jobs:
           AMD64_ID: ${{ needs.build-amd64.outputs.image-id }}
           ARM64_ID: ${{ needs.build-arm64.outputs.image-id }}
         run: scripts/ci/publish_index.sh
+      # Signature dans ci.yaml (pas dans un workflow réutilisable) : le SAN du
+      # certificat Fulcio est alors ci.yaml@refs/tags/vX.Y.Z, vérifié à l'admission.
+      - name: Sign the index and attest each platform SBOM by digest
+        env:
+          REPOSITORY: ${{ steps.version.outputs.repository }}
+          INDEX_DIGEST: ${{ steps.push.outputs.digest }}
+          AMD64_DIGEST: ${{ steps.push.outputs.amd64_digest }}
+          ARM64_DIGEST: ${{ steps.push.outputs.arm64_digest }}
+        run: scripts/ci/sign_release.sh
       - name: Log out
         if: ${{ always() }}
         run: docker logout ghcr.io
+  admission:
+    name: Signature and SBOM admission
+    needs: release
+    runs-on: ubuntu-24.04
+    permissions: {}  # lectures publiques seulement : aucun jeton, aucun artefact privé
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - run: scripts/ci/install_tools.sh crane cosign
+      - name: Verify signature, attestations and tags without credentials
+        env:
+          REPOSITORY: ${{ needs.release.outputs.repository }}
+          VERSION: ${{ needs.release.outputs.version }}
+          MINOR: ${{ needs.release.outputs.minor }}
+          MAJOR: ${{ needs.release.outputs.major }}
+          INDEX_DIGEST: ${{ needs.release.outputs.digest }}
+          AMD64_DIGEST: ${{ needs.release.outputs.amd64-digest }}
+          ARM64_DIGEST: ${{ needs.release.outputs.arm64-digest }}
+          AMD64_SBOM_COMPONENTS: ${{ needs.release.outputs.amd64-sbom-components }}
+          AMD64_SBOM_SHA256: ${{ needs.release.outputs.amd64-sbom-sha256 }}
+          ARM64_SBOM_COMPONENTS: ${{ needs.release.outputs.arm64-sbom-components }}
+          ARM64_SBOM_SHA256: ${{ needs.release.outputs.arm64-sbom-sha256 }}
+        run: scripts/ci/admit_release.sh
   verify-publication:
     name: Anonymous pull and native smoke test
-    needs: [release, build-amd64, build-arm64]
+    needs: [release, admission, build-amd64, build-arm64]
     strategy:
       fail-fast: false
       matrix:

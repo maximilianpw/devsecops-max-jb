@@ -55,5 +55,10 @@ for tag in "$VERSION" "$MINOR" "$MAJOR"; do
   crane tag "$REPOSITORY@$index_digest" "$tag"
   test "$(crane digest "$REPOSITORY:$tag")" = "$index_digest"
 done
-printf 'digest=%s\n' "$index_digest" >> "$GITHUB_OUTPUT"
+# Les digests par plateforme servent à l'attestation SBOM (une par manifeste).
+{
+  printf 'digest=%s\n' "$index_digest"
+  printf 'amd64_digest=%s\n' "$amd64_digest"
+  printf 'arm64_digest=%s\n' "$arm64_digest"
+} >> "$GITHUB_OUTPUT"
 echo "Index publié et tags vérifiés : $index_digest"
