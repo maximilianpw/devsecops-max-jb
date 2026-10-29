@@ -673,3 +673,59 @@ def test_sbom_step_rejects_an_image_id_that_differs_from_the_build_output(
     root, env, ids = sbom_release
     env['EXPECTED_IMAGE_ID'] = ids['arm64']
     assert verify_sbom(root, env).returncode != 0
+
+
+@pytest.mark.parametrize('cache_write,event,ref,allowed', [
+    ('true', 'push', 'refs/heads/main', True),
+    ('true', 'push', 'refs/tags/v1.2.0', True),
+    ('true', 'push', 'refs/heads/main-evil', False),
+    ('true', 'push', 'refs/heads/feature', False),
+    ('true', 'pull_request', 'refs/heads/main', False),
+    ('true', 'pull_request', 'refs/pull/12/merge', False),
+    ('true', 'pull_request_target', 'refs/heads/main', False),
+    ('false', 'push', 'refs/heads/main', False),
+    ('', 'push', 'refs/tags/v1.2.0', False),
+])
+def test_cache_export_requires_explicit_trusted_push(
+        sandbox, cache_write, event, ref, allowed):
+    root, env = sandbox
+    make_image(root / 'fixture.tar')
+    env.update(CACHE_WRITE=cache_write, GITHUB_EVENT_NAME=event, GITHUB_REF=ref,
+               GITHUB_TOKEN='test-only-registry-token', GITHUB_ACTOR='tester')
+    stub(root, 'git', 'raise SystemExit(0)\n')
+    stub(root, 'openssl', "print('a' * 48)\n")
+    # L'audit réseau est remplacé, mais le script réel décide login et export.
+    (root / 'scripts/ci/audit_registry_cache.py').write_text('pass\n')
+    stub(root, 'docker', r'''import json, os, shutil, sys
+from pathlib import Path
+args = sys.argv[1:]
+with open(os.environ['CALLS'], 'a') as stream:
+    stream.write(json.dumps(args) + '\n')
+if args[:2] == ['buildx', 'build']:
+    if args[-1].endswith('pipctx'):
+        print('Using cached dependency')
+    elif '--secret' in args:
+        print('Build secret package_token must not be empty')
+        sys.exit(1)
+    else:
+        print('secret package_token: not found')
+        sys.exit(1)
+elif args[:2] == ['buildx', 'bake']:
+    if any('cache-to=type=local' in arg for arg in args):
+        blobs = Path('dist/layer-cache/blobs/sha256')
+        blobs.mkdir(parents=True, exist_ok=True)
+        (blobs / 'abc').write_text('clean cache')
+    print('CACHED')
+elif args[0] == 'save':
+    shutil.copyfile(Path(os.environ['TEST_ROOT']) / 'fixture.tar',
+                    args[args.index('--output') + 1])
+''')
+    result = execute(root, env, 'build_variant.sh')
+    assert result.returncode == 0, result.stderr
+    recorded = calls(root)
+    logins = [call for call in recorded if call[:1] == ['login']]
+    exports = [call for call in recorded
+               if any('cache-to=type=registry' in arg for arg in call)]
+    assert len(logins) == int(allowed)
+    assert len(exports) == int(allowed)
+    assert env['GITHUB_TOKEN'].encode() not in result.stdout + result.stderr

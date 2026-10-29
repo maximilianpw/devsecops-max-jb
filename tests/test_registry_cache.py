@@ -140,3 +140,52 @@ def test_registry_cache_handles_compressed_leak(monkeypatch, compression):
         json.dumps(manifest).encode(), blobs))
     with pytest.raises((ValueError, RuntimeError)):
         audit.audit('ghcr.io/example/repo:buildcache-amd64', SECRET)
+
+
+@pytest.mark.parametrize('error,expected', [
+    (ValueError('cache zstd non auditable ; exporter en gzip'), 'cache zstd'),
+    (ValueError('digest de cache divergent'), 'digest de cache divergent'),
+    (RuntimeError('jeton trouvé dans les blobs du cache registre'), 'jeton trouvé'),
+    (RuntimeError('HTTP 403'), 'HTTP 403'),
+    (audit.urllib.error.HTTPError('https://ghcr.io', 403, SECRET.decode(),
+                                  {}, None), 'HTTP 403'),
+    (RuntimeError(SECRET.decode()), 'cause non publiée'),
+])
+def test_audit_failure_is_diagnostic_and_does_not_expose_secret(
+        tmp_path, monkeypatch, error, expected):
+    secret = tmp_path / 'token'
+    secret.write_bytes(SECRET)
+    monkeypatch.setattr('sys.argv', [
+        'audit_registry_cache.py', '--secret-file', str(secret),
+        '--ref', 'ghcr.io/example/repo:buildcache-amd64'])
+
+    def fail(*args):
+        raise error
+
+    monkeypatch.setattr(audit, 'audit', fail)
+    with pytest.raises(SystemExit) as result:
+        audit.main()
+    message = str(result.value)
+    assert expected in message
+    assert type(error).__name__ in message
+    assert SECRET.decode() not in message
+
+
+def test_reusable_build_separates_cache_permissions_and_guards():
+    # Inspecte les deux jobs YAML sans ajouter une dépendance au runner de test.
+    import re
+    source = (ROOT / '.github/workflows/tp2-build.yaml').read_text()
+    blocks = dict(re.findall(
+        r'^  (trusted|readonly):\n(.*?)(?=^  [\w-]+:|\Z)',
+        source.split('jobs:\n', 1)[1], re.MULTILINE | re.DOTALL))
+    trusted, readonly = blocks['trusted'], blocks['readonly']
+    guard = ("inputs.cache-write && github.event_name == 'push' && "
+             "(github.ref == 'refs/heads/main' || "
+             "startsWith(github.ref, 'refs/tags/'))")
+    assert f'if: ${{{{ {guard} }}}}' in trusted
+    assert f'if: ${{{{ !({guard}) }}}}' in readonly
+    assert '      packages: write\n' in trusted
+    assert 'packages:' not in readonly
+    assert 'GITHUB_TOKEN:' not in readonly
+    assert "          CACHE_WRITE: 'false'\n" in readonly
+    assert '          GITHUB_TOKEN:' in trusted

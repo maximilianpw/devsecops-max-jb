@@ -65,7 +65,7 @@ def http_get(url, token=None, headers=None):
                 header_items = dict(response_headers) if response_headers else {}
             return response.read(), header_items
     except urllib.error.HTTPError as error:
-        raise RuntimeError(f"HTTP {error.code} pour {url}: {error.reason}") from error
+        raise RuntimeError(f"HTTP {error.code}") from None
 
 
 def manifest_digests(manifest):
@@ -127,7 +127,7 @@ def audit(ref, secret, token=None):
         if secret_contains(blob, secret):
             leaked.append(digest)
     if leaked:
-        raise RuntimeError(f"jeton trouvé dans les blobs du cache registre: {leaked}")
+        raise RuntimeError("jeton trouvé dans les blobs du cache registre")
     return {
         "registry": registry,
         "repository": repository,
@@ -148,9 +148,26 @@ def main():
         raise SystemExit("jeton de contrôle vide")
     try:
         result = audit(args.ref, token)
-    except Exception:
-        # Ne jamais afficher une réponse distante susceptible de contenir le jeton.
-        raise SystemExit("audit du cache registre échoué") from None
+    except Exception as error:
+        # Seuls les diagnostics contrôlés sont publiés, jamais les réponses réseau.
+        safe_messages = {
+            "référence de cache invalide", "référence de cache sans tag ni digest",
+            "jeton d'accès registre introuvable", "cache OCI sans config ou couches",
+            "digest SHA256 de cache invalide", "digest de cache divergent",
+            "cache zstd non auditable ; exporter en gzip",
+            "jeton trouvé dans le manifeste du cache registre",
+            "jeton trouvé dans les blobs du cache registre",
+        }
+        message = str(error)
+        if isinstance(error, urllib.error.HTTPError):
+            detail = f"HTTP {error.code}"
+        elif message in safe_messages or re.fullmatch(r"HTTP [1-5][0-9]{2}", message):
+            detail = message
+        else:
+            detail = "cause non publiée"
+        raise SystemExit(
+            f"audit du cache registre échoué ({type(error).__name__}) : {detail}"
+        ) from None
     print(f"Cache registre audité: {result['blob_count']} blobs, sans jeton.")
 
 
