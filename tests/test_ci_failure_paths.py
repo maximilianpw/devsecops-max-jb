@@ -91,6 +91,7 @@ elif 'exec' in args:
 def test_scans_collect_remaining_reports_and_gates(sandbox, failure):
     root, env = sandbox
     env['FAIL_SCAN'] = failure
+    env['EXPECTED_IMAGE_ID'] = 'sha256:' + 'd' * 64
     # Archive verification remains a fail-fast prerequisite, outside scan aggregation.
     (root / 'scripts/ci/load_verified_image.sh').write_text('#!/bin/sh\nexit 0\n')
     stub(root, 'dive', 'raise SystemExit(0)\n')
@@ -135,6 +136,9 @@ if failure == 'db-gate' and '--image-src' in args and '--exit-code' in args:
 ''')
     result = execute(root, env, 'scan_variant.sh')
     recorded = calls(root)
+    sbom_call = next(call for call in recorded if call[:1] == ['scan'])
+    assert (sbom_call[sbom_call.index('--source-version') + 1]
+            == env['EXPECTED_IMAGE_ID'])
     assert (result.returncode == 0) == (failure == 'none'), result.stderr
     reports = ('trivy-image-full.json', 'trivy-deps-full.json', 'trivy-db-full.json')
     for report in reports:

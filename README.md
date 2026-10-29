@@ -811,6 +811,7 @@ conteneur ([`scan_variant.sh`](scripts/ci/scan_variant.sh)) :
 
 ```bash
 syft scan docker-archive:dist/image.tar \
+  --source-version "$EXPECTED_IMAGE_ID" \
   -o cyclonedx-json=reports/sbom/sbom.cdx.json \
   -o spdx-json=reports/sbom/sbom.spdx.json
 ```
@@ -1017,7 +1018,7 @@ l'archive vérifiée. `metadata.component.version` doit correspondre exactement
 à cet identifiant. Une SBOM sans cette liaison est rejetée avant publication,
 même si ses couches de dépendances appartiennent à l'image. La sortie brute de
 Syft utilise un autre digest ; les fixtures conservent ce cas de rejet.
-Ce contrat doit être intégré avec Max avant de lancer une release.
+Le scan utilise désormais cette convention dans `scan_variant.sh`.
 
 ### Cosign 3.1.4 et format des bundles
 
@@ -1095,7 +1096,9 @@ dive --ci --ci-config .dive-ci flask-api:local
 docker save -o image.tar flask-api:local
 trivy image --input image.tar --scanners vuln \
   --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1
-syft scan docker-archive:image.tar -o cyclonedx-json=sbom.cdx.json -o spdx-json=sbom.spdx.json
+image_id=$(python3 scripts/ci/image_archive.py describe image.tar | python3 -c 'import json,sys; print(json.load(sys.stdin)["image_id"])')
+syft scan docker-archive:image.tar --source-version "$image_id" \
+  -o cyclonedx-json=sbom.cdx.json -o spdx-json=sbom.spdx.json
 scripts/ci/sbom_stats.sh sbom.cdx.json sbom.spdx.json
 grype sbom:sbom.cdx.json --config .grype.yaml
 

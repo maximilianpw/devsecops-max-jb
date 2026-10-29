@@ -37,7 +37,7 @@ gate report-image-table trivy image --input dist/image.tar --scanners vuln --ski
 gate report-deps trivy fs --scanners vuln --skip-db-update --skip-dirs dist,reports --format json --output reports/trivy-deps-full.json .
 gate report-db trivy image --image-src remote --platform "$EXPECTED_PLATFORM" --scanners vuln --skip-db-update --format json --output reports/trivy-db-full.json "$db_image"
 mkdir -p reports/sbom
-gate sbom syft scan docker-archive:dist/image.tar -o cyclonedx-json=reports/sbom/sbom.cdx.json -o spdx-json=reports/sbom/sbom.spdx.json
+gate sbom syft scan docker-archive:dist/image.tar --source-version "$EXPECTED_IMAGE_ID" -o cyclonedx-json=reports/sbom/sbom.cdx.json -o spdx-json=reports/sbom/sbom.spdx.json
 # .grype.yaml est chargé implicitement : seuil levé pour ce rapport, VEX conservé.
 gate report-grype env GRYPE_FAIL_ON_SEVERITY= grype sbom:reports/sbom/sbom.cdx.json --only-fixed=false -o json --file reports/grype-full.json
 gate sbom-stats scripts/ci/sbom_stats.sh reports/sbom/sbom.cdx.json reports/sbom/sbom.spdx.json > reports/sbom-stats.txt
