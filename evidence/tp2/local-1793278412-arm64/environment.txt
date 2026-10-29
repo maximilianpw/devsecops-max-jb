@@ -1,0 +1,42 @@
+2026-10-29T12:53:32Z
+f00d13b3e027020a2e5702fa651f7700b9cdc1ab
+ M .github/workflows/tp2-scan.yaml
+ A PLAN-PERSONNE-A.md
+ A PLAN-PERSONNE-B.md
+ A PLAN-TP2.md
+ M scripts/ci/install_tools.sh
+ M scripts/ci/scan_variant.sh
+ M scripts/evidence/tp2.sh
+ M tests/test_ci_failure_paths.py
+ M tests/test_tp2_scripts.py
+?? evidence/tp2/local-1793278412-arm64/
+?? scripts/ci/sbom_stats.sh
+Client:
+ Version:           29.8.2
+ API version:       1.56
+ Go version:        go1.26.8
+ Git commit:        7fc2dff
+ Built:             Sun Oct 11 12:42:20 2026
+ OS/Arch:           darwin/arm64
+ Context:           orbstack
+
+Server: Docker Engine - Community
+ Engine:
+  Version:          29.8.2
+  API version:      1.56 (minimum version 1.40)
+  Go version:       go1.26.8
+  Git commit:       8af9fe3
+  Built:            Wed Sep 30 19:32:49 2026
+  OS/Arch:          linux/arm64
+  Experimental:     false
+ containerd:
+  Version:          v2.3.6
+  GitCommit:        ee2735368117d2eb259779949d5e75cdafec9761
+ runc:
+  Version:          1.5.2
+  GitCommit:        29dd3dc2b13b4123162e5fe132504bb4b15569f1
+ docker-init:
+  Version:          0.19.0
+  GitCommit:        de40ad0
+github.com/docker/buildx v0.37.2 2d379c0c3f22da0d2759d132a0ec81ca949098f0
+Docker Compose version v5.5.0

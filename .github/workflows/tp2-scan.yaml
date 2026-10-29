@@ -20,12 +20,17 @@ on:
       run-attempt:
         type: string
         required: true
+    outputs:
+      sbom-artifact-id:
+        value: ${{ jobs.scan.outputs.sbom-artifact-id }}
 permissions: {}
 jobs:
   scan:
     runs-on: ubuntu-24.04
     permissions:
       contents: read
+    outputs:
+      sbom-artifact-id: ${{ steps.sbom.outputs.artifact-id }}
     env:
       IMAGE: ${{ inputs.image }}
       EXPECTED_IMAGE_ID: ${{ inputs.image-id }}
@@ -41,8 +46,15 @@ jobs:
           artifact-ids: ${{ inputs.artifact-id }}
           path: dist
           merge-multiple: true
-      - run: scripts/ci/install_tools.sh dive trivy
+      - run: scripts/ci/install_tools.sh dive trivy syft grype
       - run: scripts/ci/scan_variant.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        id: sbom
+        with:
+          name: sbom-${{ inputs.arch }}-${{ github.run_attempt }}
+          path: reports/sbom/
+          if-no-files-found: error
+          retention-days: 30
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: ${{ always() }}
         with:

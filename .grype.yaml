@@ -1,0 +1,4 @@
+only-fixed: true
+fail-on-severity: high
+vex-documents:
+  - security.vex.json
